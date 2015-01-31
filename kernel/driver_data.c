@@ -6,17 +6,17 @@
 void qnx_driver_data_init(struct qnx_driver_data* data)
 {
    INIT_LIST_HEAD(&data->process_entries);
-   rwlock_init(&data->process_entries_lock);
+   init_rwsem(&data->process_entries_lock);
 }
 
 
 void qnx_driver_data_add_process(struct qnx_driver_data* data, struct qnx_process_entry* entry)
 {
-   write_lock(&data->process_entries_lock);
+   down_write(&data->process_entries_lock);
    
    list_add(&entry->hook, &data->process_entries);
    
-   write_unlock(&data->process_entries_lock);
+   up_write(&data->process_entries_lock);
 }
 
 
@@ -24,7 +24,7 @@ struct qnx_process_entry* qnx_driver_data_find_process(struct qnx_driver_data* d
 {      
    struct qnx_process_entry* entry;
    printk("searching process %d\n", pid);
-   read_lock(&data->process_entries_lock);
+   down_read(&data->process_entries_lock);
    
    list_for_each_entry(entry, &data->process_entries, hook)
    {
@@ -38,7 +38,7 @@ struct qnx_process_entry* qnx_driver_data_find_process(struct qnx_driver_data* d
    entry = 0;
     
 out:
-   read_unlock(&data->process_entries_lock);
+   up_read(&data->process_entries_lock);
    
    return entry;
 }
@@ -50,7 +50,7 @@ int qnx_driver_data_is_process_available(struct qnx_driver_data* data, pid_t pid
    
    pr_debug("searching process entry pid=%d\n", pid);
    
-   read_lock(&data->process_entries_lock);
+   down_read(&data->process_entries_lock);
    
    list_for_each_entry(entry, &data->process_entries, hook)
    {
@@ -61,7 +61,7 @@ int qnx_driver_data_is_process_available(struct qnx_driver_data* data, pid_t pid
    entry = 0;
     
 out:
-   read_unlock(&data->process_entries_lock);
+   up_read(&data->process_entries_lock);
    
    return entry?1:0;
 }
@@ -73,7 +73,7 @@ void qnx_driver_data_remove(struct qnx_driver_data* data, pid_t pid)
 
    printk("remove for pid=%d tid=%d, tgid=%d\n", pid, current->pid, current->tgid);
    
-   write_lock(&data->process_entries_lock);
+   down_write(&data->process_entries_lock);
    
    list_for_each(iter, &data->process_entries) 
    {
@@ -84,7 +84,7 @@ void qnx_driver_data_remove(struct qnx_driver_data* data, pid_t pid)
       }
    }
       
-   write_unlock(&data->process_entries_lock);
+   up_write(&data->process_entries_lock);
 }
 
 

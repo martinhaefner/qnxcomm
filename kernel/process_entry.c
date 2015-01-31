@@ -10,9 +10,9 @@ void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_d
    INIT_LIST_HEAD(&entry->connections);
    INIT_LIST_HEAD(&entry->pending);
    
-   rwlock_init(&entry->channels_lock);
-   rwlock_init(&entry->connections_lock);
-   spin_lock_init(&entry->pending_lock);   
+   init_rwsem(&entry->channels_lock);
+   init_rwsem(&entry->connections_lock);
+   sema_init(&entry->pending_lock, 1);   
    
    entry->driver = driver;
 }
@@ -28,7 +28,7 @@ void qnx_process_entry_free(struct kref* refcount)
 
    printk("qnx_process_entry_free called\n");
  
-   write_lock(&entry->channels_lock);
+   down_write(&entry->channels_lock);
    
    while(!list_empty(&entry->channels))
    {
@@ -41,11 +41,11 @@ void qnx_process_entry_free(struct kref* refcount)
       qnx_channel_release(chnl);
    }
    
-   write_unlock(&entry->channels_lock);
+   up_write(&entry->channels_lock);
    
    printk("channels done\n");
  
-   spin_lock(&entry->pending_lock);
+   down(&entry->pending_lock);
    
    list_for_each_safe(iter, next, &entry->pending)
    {  
@@ -55,11 +55,11 @@ void qnx_process_entry_free(struct kref* refcount)
       list_del(iter);      
    }
    
-   spin_unlock(&entry->pending_lock);  
+   up(&entry->pending_lock);  
    
    printk("pendings done\n");
  
-   write_lock(&entry->connections_lock);
+   down_write(&entry->connections_lock);
    
    while(!list_empty(&entry->connections))
    {
@@ -72,7 +72,7 @@ void qnx_process_entry_free(struct kref* refcount)
       kfree(conn);
    }
 
-   write_unlock(&entry->connections_lock); 
+   up_write(&entry->connections_lock); 
    
    printk("finished\n");
  
@@ -95,7 +95,7 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
    struct list_head* iter;
    struct qnx_channel* chnl = 0;
    
-   write_lock(&entry->channels_lock);
+   down_write(&entry->channels_lock);
    
    list_for_each(iter, &entry->channels)
    {
@@ -110,7 +110,7 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
       }    
    }
    
-   write_unlock(&entry->channels_lock);
+   up_write(&entry->channels_lock);
    
    return rc;
 }

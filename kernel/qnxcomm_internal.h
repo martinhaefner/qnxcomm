@@ -11,7 +11,6 @@
 #include <linux/device.h>
 #include <linux/slab.h>
 #include <linux/semaphore.h>
-#include <linux/spinlock.h>
 #include <linux/proc_fs.h>
 #include <linux/version.h>
 
@@ -52,7 +51,7 @@ struct qnx_channel
    int chid;
    
    struct list_head waiting;
-   spinlock_t waiting_lock;
+   struct semaphore waiting_lock;
    
    wait_queue_head_t waiting_queue;
    atomic_t num_waiting;     ///< wait queue helper flag
@@ -73,7 +72,7 @@ struct qnx_connection
 struct qnx_driver_data
 {
    struct list_head process_entries;
-   rwlock_t process_entries_lock;   
+   struct rw_semaphore process_entries_lock;   
 };
 
 
@@ -88,9 +87,9 @@ struct qnx_process_entry
    struct list_head connections;
    struct list_head pending;
       
-   rwlock_t channels_lock;  
-   rwlock_t connections_lock;
-   spinlock_t pending_lock;
+   struct rw_semaphore channels_lock;  
+   struct rw_semaphore connections_lock;
+   struct semaphore pending_lock;
    
    struct qnx_driver_data* driver;
 };

@@ -15,13 +15,13 @@ qnx_show_connections(struct seq_file *buf, void *v)
    struct qnx_connection* conn;
    int have_output = 0;
    
-   read_lock(&data->process_entries_lock);
+   down_read(&data->process_entries_lock);
    
    if (!list_empty(&data->process_entries))
    {
       list_for_each_entry(entry, &data->process_entries, hook)
       {
-         read_lock(&entry->connections_lock);
+         down_read(&entry->connections_lock);
          
          if (!list_empty(&entry->connections))
          {
@@ -36,11 +36,11 @@ qnx_show_connections(struct seq_file *buf, void *v)
             seq_printf(buf, "\n");
          }
                      
-         read_unlock(&entry->connections_lock);
+         up_read(&entry->connections_lock);
       }
    }
    
-   read_unlock(&data->process_entries_lock);
+   up_read(&data->process_entries_lock);
    
    if (!have_output)
       seq_printf(buf, "<no processes attached>\n");
@@ -57,13 +57,13 @@ qnx_show_channels(struct seq_file *buf, void *v)
    struct qnx_channel* chnl;
    int have_output = 0;
    
-   read_lock(&data->process_entries_lock);
+   down_read(&data->process_entries_lock);
    
    if (!list_empty(&data->process_entries))
    {
       list_for_each_entry(entry, &data->process_entries, hook)
       {
-         read_lock(&entry->channels_lock);
+         down_read(&entry->channels_lock);
        
          if (!list_empty(&entry->channels))
          {
@@ -78,11 +78,11 @@ qnx_show_channels(struct seq_file *buf, void *v)
             seq_printf(buf, "\n");
          }
          
-         read_unlock(&entry->channels_lock);
+         up_read(&entry->channels_lock);
       }
    }
    
-   read_unlock(&data->process_entries_lock);
+   up_read(&data->process_entries_lock);
    
    if (!have_output)
       seq_printf(buf, "<no processes attached>\n");

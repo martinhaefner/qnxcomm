@@ -1,0 +1,8 @@
+*.o
+*.o.cmd
+Module.symvers
+*.ko
+*.ko.cmd
+qnxcomm.mod.c
+.tmp_versions
+modules.order

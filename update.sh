@@ -2,7 +2,7 @@
 
 TARGET=$1
 
-if [ $TARGET = distclean ]; then
+if [ "$TARGET" = distclean ]; then
    rm -rf build
    (cd kernel && make clean)
    exit 0

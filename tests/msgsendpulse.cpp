@@ -56,13 +56,10 @@ protected:
    
    void TearDown()
    {
-      
-      t_.join(); 
+      t_.join();      
       
       ChannelDestroy(chid_);
       ConnectDetach(coid_);
-      
-      
    }
       
    

@@ -118,11 +118,11 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
 
 void qnx_process_entry_add_pending(struct qnx_process_entry* entry, struct qnx_internal_msgsend* data)
 {
-   spin_lock(&entry->pending_lock);
+   down(&entry->pending_lock);
    
    list_add(&data->hook, &entry->pending);
    
-   spin_unlock(&entry->pending_lock);
+   up(&entry->pending_lock);
 }
 
 
@@ -130,7 +130,7 @@ struct qnx_internal_msgsend* qnx_process_entry_release_pending(struct qnx_proces
 {
    struct qnx_internal_msgsend* iter;
    
-   spin_lock(&entry->pending_lock);
+   down(&entry->pending_lock);
    
    list_for_each_entry(iter, &entry->pending, hook) 
    {
@@ -145,7 +145,7 @@ struct qnx_internal_msgsend* qnx_process_entry_release_pending(struct qnx_proces
    
 out:    
 
-   spin_unlock(&entry->pending_lock);
+   up(&entry->pending_lock);
    
    return iter;
 }
@@ -159,11 +159,11 @@ int qnx_process_entry_add_channel(struct qnx_process_entry* entry)
    rc = qnx_channel_init(chnl);
 //   chnl->process = entry;   // FIXME refcounted?
    
-   write_lock(&entry->channels_lock);
+   down_write(&entry->channels_lock);
    
    list_add(&chnl->hook, &entry->channels);
    
-   write_unlock(&entry->channels_lock);
+   up_write(&entry->channels_lock);
    
    return rc;
 }
@@ -173,7 +173,7 @@ struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* ent
 {
    struct qnx_channel* chnl;
 
-   read_lock(&entry->channels_lock);
+   down_read(&entry->channels_lock);
    
    list_for_each_entry(chnl, &entry->channels, hook) 
    {
@@ -187,7 +187,7 @@ struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* ent
    chnl = 0;
    
 out:   
-   read_unlock(&entry->channels_lock);
+   up_read(&entry->channels_lock);
     
    return chnl;
 }
@@ -197,7 +197,7 @@ int qnx_process_entry_is_channel_available(struct qnx_process_entry* entry, int 
 {
    struct qnx_channel* chnl;  
    
-   read_lock(&entry->channels_lock);
+   down_read(&entry->channels_lock);
    
    list_for_each_entry(chnl, &entry->channels, hook)
    {
@@ -208,7 +208,7 @@ int qnx_process_entry_is_channel_available(struct qnx_process_entry* entry, int 
    chnl = 0;
    
 out:
-   read_unlock(&entry->channels_lock);
+   up_read(&entry->channels_lock);
    
    return chnl?1:0;
 }
@@ -227,11 +227,11 @@ int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct io_
          
          rc = qnx_connection_init(conn, att_data->pid, att_data->chid, att_data->index);
             
-         write_lock(&entry->connections_lock);
+         down_write(&entry->connections_lock);
          
          list_add(&conn->hook, &entry->connections);
          
-         write_unlock(&entry->connections_lock);
+         up_write(&entry->connections_lock);
       }
       else
          rc = -ESRCH;
@@ -252,7 +252,7 @@ int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coi
    struct list_head* iter;
    struct qnx_connection* conn = 0;
    
-   write_lock(&entry->connections_lock);
+   down_write(&entry->connections_lock);
    
    list_for_each(iter, &entry->connections)
    {
@@ -267,7 +267,7 @@ int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coi
       }    
    }
    
-   write_unlock(&entry->connections_lock);
+   up_write(&entry->connections_lock);
    
    return rc;
 }
@@ -278,7 +278,7 @@ struct qnx_connection qnx_process_entry_find_connection(struct qnx_process_entry
    struct qnx_connection rc = { { 0 }, 0 };
    struct qnx_connection* conn;
    
-   read_lock(&entry->connections_lock);
+   down_read(&entry->connections_lock);
 
    list_for_each_entry(conn, &entry->connections, hook)
    {
@@ -292,7 +292,7 @@ struct qnx_connection qnx_process_entry_find_connection(struct qnx_process_entry
       }
    }
    
-   read_unlock(&entry->connections_lock);
+   up_read(&entry->connections_lock);
     
    return rc;
 }

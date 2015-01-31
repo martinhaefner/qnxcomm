@@ -106,14 +106,14 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
       goto out;
    }
    
-   spin_lock(&chnl->waiting_lock);
+   down(&chnl->waiting_lock);
    ptr = chnl->waiting.next;
    
    // empty?! FIXME maybe spurious wakeup here?!
    if (ptr == &chnl->waiting)
    {
       printk("Empty...\n");
-      spin_unlock(&chnl->waiting_lock);      
+      up(&chnl->waiting_lock);      
       
       ret = -ETIMEDOUT;
       goto out;
@@ -122,7 +122,7 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
    send_data = list_entry(ptr, struct qnx_internal_msgsend, hook);   
    list_del_init(ptr);
    
-   spin_unlock(&chnl->waiting_lock);
+   up(&chnl->waiting_lock);
    
    // assign meta information
    memset(&recv_data->info, 0, sizeof(struct _msg_info));   

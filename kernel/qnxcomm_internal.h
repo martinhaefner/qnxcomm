@@ -15,6 +15,7 @@
 #include <linux/version.h>
 
 #include "qnxcomm_driver.h"
+#include "compatibility.h"
 
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,0,0)
@@ -33,9 +34,11 @@ struct qnx_internal_msgsend
    
    pid_t sender_pid;
    
-   // FIXME make this a member and use a union instead
-   struct io_msgsend* data;
-   struct io_msgsendpulse* pulse;
+   union
+   {
+      struct io_msgsend msg;
+      struct io_msgsendpulse pulse; 
+   } data;
       
    struct io_iov reply;
    struct task_struct* task;
@@ -47,7 +50,6 @@ struct qnx_channel
    struct list_head hook;
    struct kref refcnt;
       
-   //XXX remove this struct qnx_process_entry* process;
    int chid;
    
    struct list_head waiting;
@@ -117,8 +119,8 @@ extern int qnx_driver_data_is_process_available(struct qnx_driver_data* data, pi
 
 
 extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgsend* io, pid_t pid);
-extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgsend* io, struct io_msgsendv* _iov, pid_t pid);
-extern void qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io_msgsendpulse* io, pid_t pid);
+extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgsendv* _iov, pid_t pid);
+extern int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io_msgsendpulse* io, pid_t pid);
 
 extern void qnx_internal_msgsend_cleanup_and_free(struct qnx_internal_msgsend* send_data);
 extern void qnx_internal_msgsend_destroy(struct qnx_internal_msgsend* send_data);

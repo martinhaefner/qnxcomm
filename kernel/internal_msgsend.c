@@ -15,37 +15,7 @@ int get_new_rcvid(void)
 }
 
 
-// TODO move to separate header
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,0,0)
-static 
-int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len)
-{
-   while (len > 0) 
-   {
-      if (iov->iov_len) 
-      {
-         int copy = min_t(unsigned int, len, iov->iov_len);
-         if (copy_from_user(kdata, iov->iov_base, copy))
-            return -EFAULT;
-            
-         len -= copy;
-         kdata += copy;
-         iov->iov_base += copy;
-         iov->iov_len -= copy;
-      }
-      
-      iov++;
-   }
-
-   return 0;
- }
-#endif
-
-
-// -----------------------------------------------------------------------------
-
-
-int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgsend* io, struct io_msgsendv* _iov, pid_t pid)
+int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgsendv* _iov, pid_t pid)
 {   
    int rc = -ENOMEM;
    
@@ -66,20 +36,18 @@ int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgs
    if (memcpy_fromiovec(inbuf, _iov->in, inlen))
       goto out_free_all;
       
-   io->coid = _iov->coid;      
-   io->timeout_ms = _iov->timeout_ms;
-   io->in.iov_base = inbuf;
-   io->in.iov_len = inlen;
-   
-   io->out.iov_base = outbuf;
-   io->out.iov_len = outlen;
-   
    data->rcvid = get_new_rcvid();   
    data->status = 0;   
    data->sender_pid = pid;
    
-   data->data = io;
-   data->pulse = 0;
+   data->data.msg.coid = _iov->coid;      
+   data->data.msg.timeout_ms = _iov->timeout_ms;
+   
+   data->data.msg.in.iov_base = inbuf;
+   data->data.msg.in.iov_len = inlen;
+   
+   data->data.msg.out.iov_base = outbuf;
+   data->data.msg.out.iov_len = outlen;
    
    memset(&data->reply, 0, sizeof(data->reply));
    data->task = 0;
@@ -101,63 +69,61 @@ out:
 
 int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgsend* io, pid_t pid)
 {        
-   int rc = 0;
+   void* buf = 0;
    
-   void* buf = kmalloc(io->in.iov_len, GFP_USER);
-   if (buf)
-   {   
-      if (!copy_from_user(buf, io->in.iov_base, io->in.iov_len))
-      {   
-         io->in.iov_base = buf;      
-         
-         data->rcvid = get_new_rcvid();   
-         data->status = 0;   
-         data->sender_pid = pid;
-         
-         data->data = io;
-         data->pulse = 0;
-            
-         memset(&data->reply, 0, sizeof(data->reply));
-         data->task = 0;
-      }
-      else
-      {
-         kfree(buf);
-         rc = -EFAULT;
-      }
-   }
-   else
-      rc = -ENOMEM;
+   if (copy_from_user(&data->data.msg, io, sizeof(struct io_msgsend)))
+      return -EFAULT;
       
-   return rc;
+   buf = kmalloc(data->data.msg.in.iov_len, GFP_USER);
+   if (!buf)
+      return -ENOMEM;
+   
+   if (copy_from_user(buf, data->data.msg.in.iov_base, data->data.msg.in.iov_len))
+   {
+      kfree(buf);
+      return -EFAULT;
+   }
+      
+   data->rcvid = get_new_rcvid();   
+   data->status = 0;   
+   data->sender_pid = pid;
+   
+   data->data.msg.in.iov_base = buf;      
+      
+   memset(&data->reply, 0, sizeof(data->reply));
+   data->task = current;
+   
+   return 0;
 }
 
 
-void qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io_msgsendpulse* io, pid_t pid)
+int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io_msgsendpulse* io, pid_t pid)
 {
-   data->rcvid = 0;   
+   if (copy_from_user(&data->data, io, sizeof(struct io_msgsendpulse)))
+      return -EFAULT;
+
+   data->rcvid = 0;     // is a pulse
    data->status = 0;
    data->sender_pid = pid;
-   
-   data->data = 0;
-   data->pulse = io;
-   
-   memset(&data->reply, 0, sizeof(data->reply));
    data->task = 0;
+
+   memset(&data->reply, 0, sizeof(data->reply));
+   
+   return 0;
 }
 
 
 void qnx_internal_msgsend_destroy(struct qnx_internal_msgsend* data)
 {      
-   kfree(data->data->in.iov_base);
+   kfree(data->data.msg.in.iov_base);
    kfree(data->reply.iov_base);
 }
 
 
 void qnx_internal_msgsend_destroyv(struct qnx_internal_msgsend* data)
 {      
-   kfree(data->data->in.iov_base);
-   kfree(data->data->out.iov_base);
+   kfree(data->data.msg.in.iov_base);
+   kfree(data->data.msg.out.iov_base);
    
    kfree(data->reply.iov_base);
 }

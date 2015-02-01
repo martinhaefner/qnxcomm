@@ -15,16 +15,19 @@ add_executable(unittests
    msgsend.cpp
    msgsendpulse.cpp
    timeout.cpp
+   servercrash.cpp
 )
 
 add_executable(testapp testapp.cpp )
 add_executable(testfork fork.cpp )
 add_executable(testabort abort.cpp )
+add_executable(crashapp crashapp.cpp )
 
 target_link_libraries(unittests gtest gtest_main qnxcomm rt)
 target_link_libraries(testapp qnxcomm rt)
 target_link_libraries(testfork qnxcomm rt)
 target_link_libraries(testabort qnxcomm rt)
+target_link_libraries(crashapp qnxcomm rt)
 
 # This is so you can do 'make test' to see all your tests run, instead of
 # manually running the executable runUnitTests to see those specific tests.

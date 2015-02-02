@@ -87,11 +87,9 @@ int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid)
          atomic_dec(&chnl->num_waiting);
          
          rc = 1;
-         goto out;
+         break;
       }
    }
-   
-out:
 
    up(&chnl->waiting_lock);
    

@@ -33,6 +33,7 @@ struct qnx_internal_msgsend
    int status;
    
    pid_t sender_pid;
+   pid_t receiver_pid;
    
    union
    {

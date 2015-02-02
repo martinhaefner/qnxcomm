@@ -39,6 +39,7 @@ int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgs
    data->rcvid = get_new_rcvid();   
    data->status = 0;   
    data->sender_pid = pid;
+   data->receiver_pid = 0;
    
    data->data.msg.coid = _iov->coid;      
    data->data.msg.timeout_ms = _iov->timeout_ms;
@@ -87,6 +88,7 @@ int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgse
    data->rcvid = get_new_rcvid();   
    data->status = 0;   
    data->sender_pid = pid;
+   data->receiver_pid = 0;
    
    data->data.msg.in.iov_base = buf;      
       
@@ -105,6 +107,7 @@ int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io
    data->rcvid = 0;     // is a pulse
    data->status = 0;
    data->sender_pid = pid;
+   data->receiver_pid = 0;
    data->task = 0;
 
    memset(&data->reply, 0, sizeof(data->reply));

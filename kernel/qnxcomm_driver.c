@@ -1,6 +1,7 @@
 #include <asm/uaccess.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
+#include <asm/barrier.h>
 
 #include "qnxcomm_internal.h"
 
@@ -60,16 +61,34 @@ interrupted:
 
    if (!qnx_channel_remove_message(chnl, send_data->rcvid))
    { 
+	  struct qnx_process_entry* entry;
+	  // object is out of the queue. it could be in the following states
+	  //
+	  // RECEIVING: the other side is currently running MsgReceive, at the end,
+	  //            the object is in the pending state. We have to wait
+	  //            for the object to get into RECEIVING state (1)
+	  // PENDING: during this state, this thread may take the object 
+	  //          out of the pending list. If the object is already in
+	  //          the pending state we can either grab the object (2)
+	  //          or wait for finish (3)
+	  // FINISHED: MsgReply is called on the object, so we are free to continue (4)
+	  	  
+	  while(send_data->state == QNX_STATE_RECEIVING);   // (1) busy loop
+	  
       // object is already in processing
-      struct qnx_process_entry* entry = qnx_driver_data_find_process(&driver_data, send_data->receiver_pid);
+      entry = qnx_driver_data_find_process(&driver_data, send_data->receiver_pid);
       
       if (entry)
-      {
-         // FIXME race condition here: message could be in evaluation within
-         // MsgSend but not yet put to pending queue...
-         
-         if (qnx_process_entry_release_pending(entry, send_data->rcvid) == 0)
-            rc = send_data->status;       // it's obviously done...
+      {		         
+         if (qnx_process_entry_release_pending(entry, send_data->rcvid) == 0)  
+         {       
+            rc = send_data->status;       // (2) it's obviously done...		 
+		 }
+		 else   
+		 {   			
+		    while(send_data->state == QNX_STATE_FINISHED);    // (3) busy loop
+		    // finished (4)
+		 }
          
          qnx_process_entry_release(entry);
       }
@@ -130,6 +149,7 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
    send_data = list_entry(ptr, struct qnx_internal_msgsend, hook);   
    list_del_init(ptr);
    
+   send_data->state = QNX_STATE_RECEIVING;
    up(&chnl->waiting_lock);
    
    // assign meta information
@@ -221,9 +241,10 @@ int handle_msgreply(struct qnx_process_entry* entry, struct io_reply* data)
       }
       
       send_data->status = data->status;
+      send_data->state = QNX_STATE_FINISHED;            
 
       // wake up the waiting process
-      wake_up_process(send_data->task);
+      wake_up_process(send_data->task);            
    }
    else
       rc = -ESRCH;
@@ -245,6 +266,7 @@ int handle_msgerror(struct qnx_process_entry* entry, struct io_error_reply* data
       send_data->reply.iov_len = 0;
 
       send_data->status = data->error < 0 ? data->error : -data->error;
+	  send_data->state = QNX_STATE_FINISHED;      
       
       // wake up the waiting process
       wake_up_process(send_data->task);

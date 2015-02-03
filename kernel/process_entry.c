@@ -119,8 +119,9 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
 void qnx_process_entry_add_pending(struct qnx_process_entry* entry, struct qnx_internal_msgsend* data)
 {
    down(&entry->pending_lock);
-   
+      
    list_add(&data->hook, &entry->pending);
+   data->state = QNX_STATE_PENDING;
    
    up(&entry->pending_lock);
 }

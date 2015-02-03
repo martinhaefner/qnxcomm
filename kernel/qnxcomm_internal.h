@@ -25,6 +25,12 @@
 #endif
 
 
+#define QNX_STATE_INITIAL     0
+#define QNX_STATE_RECEIVING   1
+#define QNX_STATE_PENDING     2
+#define QNX_STATE_FINISHED    3
+
+
 struct qnx_internal_msgsend
 {
    struct list_head hook;
@@ -43,6 +49,8 @@ struct qnx_internal_msgsend
       
    struct io_iov reply;
    struct task_struct* task;
+   
+   int state;
 };
 
 

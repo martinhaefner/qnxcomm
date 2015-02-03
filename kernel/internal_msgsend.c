@@ -51,7 +51,9 @@ int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgs
    data->data.msg.out.iov_len = outlen;
    
    memset(&data->reply, 0, sizeof(data->reply));
-   data->task = 0;
+   
+   data->task = 0;   
+   data->state = QNX_STATE_INITIAL;
    
    rc = 0;
    goto out;
@@ -90,10 +92,11 @@ int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgse
    data->sender_pid = pid;
    data->receiver_pid = 0;
    
-   data->data.msg.in.iov_base = buf;      
-      
+   data->data.msg.in.iov_base = buf;           
    memset(&data->reply, 0, sizeof(data->reply));
-   data->task = current;
+   
+   data->task = current;   
+   data->state = QNX_STATE_INITIAL;
    
    return 0;
 }
@@ -109,6 +112,7 @@ int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io
    data->sender_pid = pid;
    data->receiver_pid = 0;
    data->task = 0;
+   data->state = QNX_STATE_INITIAL;
 
    memset(&data->reply, 0, sizeof(data->reply));
    

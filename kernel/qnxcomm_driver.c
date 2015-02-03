@@ -176,8 +176,9 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
          
          int8_t code = send_data->data.pulse.code;         
          int value = send_data->data.pulse.value;
+         int32_t scoid = send_data->data.pulse.coid;      
          
-         if (put_user(code, &pulse->code) || copy_to_user(&pulse->value, &value, 4))
+         if (put_user(code, &pulse->code) || put_user(scoid, &pulse->scoid) || copy_to_user(&pulse->value, &value, sizeof(int)))
             ret = -EFAULT;         
          else
             ret = 0;
@@ -234,8 +235,7 @@ int handle_msgreply(struct qnx_process_entry* entry, struct qnx_io_reply* data)
             rc = -EFAULT;
       }
       else
-      {
-         // FIXME use some sort of constructor to zero fields
+      {         
          send_data->reply.iov_base = 0;
          send_data->reply.iov_len = 0;
       }
@@ -260,8 +260,7 @@ int handle_msgerror(struct qnx_process_entry* entry, struct qnx_io_error_reply* 
   
    struct qnx_internal_msgsend* send_data = qnx_process_entry_release_pending(entry, data->rcvid);
    if (send_data)
-   {
-      // FIXME use some sort of constructor to zero fields
+   {      
       send_data->reply.iov_base = 0;
       send_data->reply.iov_len = 0;
 

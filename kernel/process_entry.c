@@ -158,7 +158,6 @@ int qnx_process_entry_add_channel(struct qnx_process_entry* entry)
    struct qnx_channel* chnl = (struct qnx_channel*)kmalloc(sizeof(struct qnx_channel), GFP_USER);
    
    rc = qnx_channel_init(chnl);
-//   chnl->process = entry;   // FIXME refcounted?
    
    down_write(&entry->channels_lock);
    

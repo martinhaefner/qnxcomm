@@ -215,7 +215,7 @@ out:
 }
 
 
-int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct io_attach* att_data)
+int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct qnx_io_attach* att_data)
 {
    int rc;
    

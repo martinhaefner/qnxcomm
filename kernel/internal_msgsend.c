@@ -15,7 +15,7 @@ int get_new_rcvid(void)
 }
 
 
-int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgsendv* _iov, pid_t pid)
+int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_msgsendv* _iov, pid_t pid)
 {   
    int rc = -ENOMEM;
    
@@ -70,11 +70,11 @@ out:
 }
 
 
-int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgsend* io, pid_t pid)
+int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_msgsend* io, pid_t pid)
 {        
    void* buf = 0;
    
-   if (copy_from_user(&data->data.msg, io, sizeof(struct io_msgsend)))
+   if (copy_from_user(&data->data.msg, io, sizeof(struct qnx_io_msgsend)))
       return -EFAULT;
       
    buf = kmalloc(data->data.msg.in.iov_len, GFP_USER);
@@ -102,9 +102,9 @@ int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgse
 }
 
 
-int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io_msgsendpulse* io, pid_t pid)
+int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid)
 {
-   if (copy_from_user(&data->data, io, sizeof(struct io_msgsendpulse)))
+   if (copy_from_user(&data->data, io, sizeof(struct qnx_io_msgsendpulse)))
       return -EFAULT;
 
    data->rcvid = 0;     // is a pulse

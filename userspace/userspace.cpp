@@ -151,7 +151,7 @@ int ConnectAttach(uint32_t nd, pid_t pid, int chid, unsigned index, int flags)
          if (pid == 0)
             pid = ::getpid();
          
-         struct io_attach data = { pid, chid, index, flags };
+         struct qnx_io_attach data = { pid, chid, index, flags };
          rc = ioctl(fd, QNX_IO_CONNECTATTACH, &data);
       }
       else
@@ -191,7 +191,7 @@ int MsgSend(int coid, const void* smsg, int sbytes, void* rmsg, int rbytes)
    if (fd >= 0)
    {
       TimerStackSafe ttsf;
-      struct io_msgsend io = { coid, ttsf.get_timeout_ms(), { const_cast<void*>(smsg), sbytes }, { rmsg, rbytes } };
+      struct qnx_io_msgsend io = { coid, ttsf.get_timeout_ms(), { const_cast<void*>(smsg), (size_t)sbytes }, { rmsg, (size_t)rbytes } };
       rc = ioctl(fd, QNX_IO_MSGSEND, &io);
    }
    else
@@ -208,7 +208,7 @@ int MsgSendPulse(int coid, int /*priority*/, int code, int value)
    
    if (fd >= 0)
    {
-      struct io_msgsendpulse io = { coid, code, value };
+      struct qnx_io_msgsendpulse io = { coid, code, value };
       rc = ioctl(fd, QNX_IO_MSGSENDPULSE, &io);
    }
    else
@@ -222,14 +222,14 @@ int MsgSendPulse(int coid, int /*priority*/, int code, int value)
 
 
 extern "C" 
-int MsgReceive(int chid, void* msg, int bytes, struct _msg_info* info   )
+int MsgReceive(int chid, void* msg, int bytes, struct _msg_info* info)
 {
    int rc = -1;
    
    if (fd >= 0)
    {
       TimerStackSafe ttsf;
-      struct io_receive io = { chid, ttsf.get_timeout_ms(), { msg, bytes }, { 0 } };      
+      struct qnx_io_receive io = { chid, ttsf.get_timeout_ms(), { msg, (size_t)bytes }, { 0 } };      
       rc = ioctl(fd, QNX_IO_MSGRECEIVE, &io);
       
       if (rc >= 0 && info)      
@@ -249,7 +249,7 @@ int MsgReply(int rcvid, int status, const void* msg, int size)
    
    if (fd >= 0)
    {
-      struct io_reply io = { rcvid, status, { const_cast<void*>(msg), size } };
+      struct qnx_io_reply io = { rcvid, status, { const_cast<void*>(msg), (size_t)size } };
       rc = ioctl(fd, QNX_IO_MSGREPLY, &io);
    }
    else
@@ -266,7 +266,7 @@ int MsgError(int rcvid, int error)
    
    if (fd >= 0)
    {
-      struct io_error_reply io = { rcvid, error };
+      struct qnx_io_error_reply io = { rcvid, error };
       rc = ioctl(fd, QNX_IO_MSGERROR, &io);
    }
    else
@@ -283,7 +283,7 @@ int MsgRead(int rcvid, void* msg, int bytes, int offset)
    
    if (fd >= 0)
    {
-      struct io_read io = { rcvid, offset, { msg, bytes } };      
+      struct qnx_io_read io = { rcvid, offset, { msg, (size_t)bytes } };      
       rc = ioctl(fd, QNX_IO_MSGREAD, &io);      
    }
    else
@@ -304,7 +304,7 @@ int MsgSendv(int coid, const struct iovec* siov, int sparts, const struct iovec*
    if (fd >= 0)
    {
       TimerStackSafe ttsf;
-      struct io_msgsendv io = { coid, ttsf.get_timeout_ms(), const_cast<struct iovec*>(siov), sparts, const_cast<struct iovec*>(riov), rparts };
+      struct qnx_io_msgsendv io = { coid, ttsf.get_timeout_ms(), const_cast<struct iovec*>(siov), sparts, const_cast<struct iovec*>(riov), rparts };
       rc = ioctl(fd, QNX_IO_MSGSENDV, &io);
    }
    else

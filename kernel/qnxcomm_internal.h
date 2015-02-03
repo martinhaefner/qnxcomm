@@ -43,11 +43,11 @@ struct qnx_internal_msgsend
    
    union
    {
-      struct io_msgsend msg;
-      struct io_msgsendpulse pulse; 
+      struct qnx_io_msgsend msg;
+      struct qnx_io_msgsendpulse pulse; 
    } data;
       
-   struct io_iov reply;
+   struct iovec reply;
    struct task_struct* task;
    
    int state;
@@ -127,9 +127,9 @@ extern struct qnx_channel* qnx_driver_data_find_channel(struct qnx_driver_data* 
 extern int qnx_driver_data_is_process_available(struct qnx_driver_data* data, pid_t pid);
 
 
-extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct io_msgsend* io, pid_t pid);
-extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct io_msgsendv* _iov, pid_t pid);
-extern int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct io_msgsendpulse* io, pid_t pid);
+extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_msgsend* io, pid_t pid);
+extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_msgsendv* _iov, pid_t pid);
+extern int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid);
 
 extern void qnx_internal_msgsend_cleanup_and_free(struct qnx_internal_msgsend* send_data);
 extern void qnx_internal_msgsend_destroy(struct qnx_internal_msgsend* send_data);
@@ -143,7 +143,7 @@ extern int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int
 extern struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* entry, int chid);
 extern int qnx_process_entry_is_channel_available(struct qnx_process_entry* entry, int chid);
 
-extern int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct io_attach* att_data);
+extern int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct qnx_io_attach* att_data);
 extern int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coid);
 extern struct qnx_connection qnx_process_entry_find_connection(struct qnx_process_entry* entry, int coid);
 

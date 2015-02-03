@@ -114,7 +114,7 @@ int handle_msgsendpulse(struct qnx_channel* chnl, struct qnx_internal_msgsend* s
 
 
 static
-int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl, struct io_receive* recv_data)
+int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl, struct qnx_io_receive* recv_data)
 {
    int ret;
    void* ptr;
@@ -215,7 +215,7 @@ out:
 
 
 static
-int handle_msgreply(struct qnx_process_entry* entry, struct io_reply* data)
+int handle_msgreply(struct qnx_process_entry* entry, struct qnx_io_reply* data)
 {
    int rc = 0;
   
@@ -254,7 +254,7 @@ int handle_msgreply(struct qnx_process_entry* entry, struct io_reply* data)
 
 
 static
-int handle_msgerror(struct qnx_process_entry* entry, struct io_error_reply* data)
+int handle_msgerror(struct qnx_process_entry* entry, struct qnx_io_error_reply* data)
 {
    int rc = 0;
   
@@ -279,7 +279,7 @@ int handle_msgerror(struct qnx_process_entry* entry, struct io_error_reply* data
 
 
 static
-int handle_msgread(struct qnx_process_entry* entry, struct io_read* data)
+int handle_msgread(struct qnx_process_entry* entry, struct qnx_io_read* data)
 {
    // TODO move this to process_entry instead
    
@@ -391,9 +391,9 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_CONNECTATTACH:
       if (data)
       {
-         struct io_attach attach_data = { 0 };
+         struct qnx_io_attach attach_data = { 0 };
       
-         if (copy_from_user(&attach_data, (void*)data, sizeof(struct io_attach)) == 0)
+         if (copy_from_user(&attach_data, (void*)data, sizeof(struct qnx_io_attach)) == 0)
          {            
             rc = qnx_process_entry_add_connection(QNX_PROC_ENTRY(f), &attach_data);
             pr_info("ConnectAttach to chid=%d coid=%d\n", attach_data.chid, rc);
@@ -410,7 +410,7 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
       if (data)
       {                  
          struct qnx_internal_msgsend snddata;
-         if ((rc = qnx_internal_msgsend_init(&snddata, (struct io_msgsend*)data, QNX_PROC_ENTRY(f)->pid)) == 0)
+         if ((rc = qnx_internal_msgsend_init(&snddata, (struct qnx_io_msgsend*)data, QNX_PROC_ENTRY(f)->pid)) == 0)
          {
             struct qnx_connection conn = qnx_process_entry_find_connection(QNX_PROC_ENTRY(f), snddata.data.msg.coid);
             printk("MsgSend coid=%d\n", snddata.data.msg.coid);
@@ -456,7 +456,7 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
          // must allocate data (or reuse some other object)...
          struct qnx_internal_msgsend* snddata = (struct qnx_internal_msgsend*)kmalloc(sizeof(struct qnx_internal_msgsend), GFP_USER);
          
-         if ((rc = qnx_internal_msgsend_init_pulse(snddata, (struct io_msgsendpulse*)data, QNX_PROC_ENTRY(f)->pid)) == 0)
+         if ((rc = qnx_internal_msgsend_init_pulse(snddata, (struct qnx_io_msgsendpulse*)data, QNX_PROC_ENTRY(f)->pid)) == 0)
          {                  
             struct qnx_connection conn = qnx_process_entry_find_connection(QNX_PROC_ENTRY(f), snddata->data.pulse.coid);
             pr_debug("MsgSendPulse coid=%d\n", snddata->data.pulse.coid);
@@ -486,16 +486,16 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_MSGRECEIVE:
       if (data)
       {
-         struct io_receive recv_data = { 0 };
+         struct qnx_io_receive recv_data = { 0 };
       
-         if (copy_from_user(&recv_data, (void*)data, sizeof(struct io_receive)) == 0)
+         if (copy_from_user(&recv_data, (void*)data, sizeof(struct qnx_io_receive)) == 0)
          {                      
             struct qnx_channel* chnl = qnx_process_entry_find_channel(QNX_PROC_ENTRY(f), recv_data.chid);
             if (chnl)
             {
                rc = handle_msgreceive(QNX_PROC_ENTRY(f), chnl, &recv_data);
                
-               if (rc >= 0 && copy_to_user((void*)data, &recv_data, sizeof(struct io_receive)))
+               if (rc >= 0 && copy_to_user((void*)data, &recv_data, sizeof(struct qnx_io_receive)))
                   rc = -EFAULT;
                   
                printk("MsgReceive finished rcvid=%d\n", rc);
@@ -514,9 +514,9 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_MSGREPLY:
       if (data)
       {
-         struct io_reply reply_data = { 0 };
+         struct qnx_io_reply reply_data = { 0 };
       
-         if (copy_from_user(&reply_data, (void*)data, sizeof(struct io_reply)) == 0)
+         if (copy_from_user(&reply_data, (void*)data, sizeof(struct qnx_io_reply)) == 0)
          {              
             rc = handle_msgreply(QNX_PROC_ENTRY(f), &reply_data);
          }
@@ -531,9 +531,9 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_MSGERROR:
       if (data)
       {
-         struct io_error_reply reply_data = { 0 };
+         struct qnx_io_error_reply reply_data = { 0 };
       
-         if (copy_from_user(&reply_data, (void*)data, sizeof(struct io_error_reply)) == 0)
+         if (copy_from_user(&reply_data, (void*)data, sizeof(struct qnx_io_error_reply)) == 0)
          {              
             rc = handle_msgerror(QNX_PROC_ENTRY(f), &reply_data);
          }
@@ -548,9 +548,9 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_MSGREAD:
       if (data)
       {
-         struct io_read io_data = { 0 };
+         struct qnx_io_read io_data = { 0 };
       
-         if (copy_from_user(&io_data, (void*)data, sizeof(struct io_read)) == 0)
+         if (copy_from_user(&io_data, (void*)data, sizeof(struct qnx_io_read)) == 0)
          {              
             rc = handle_msgread(QNX_PROC_ENTRY(f), &io_data);
          }
@@ -565,9 +565,9 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_MSGSENDV:
       if (data)
       {
-         struct io_msgsendv send_data = { 0 };
+         struct qnx_io_msgsendv send_data = { 0 };
       
-         if (copy_from_user(&send_data, (void*)data, sizeof(struct io_msgsendv)) == 0)
+         if (copy_from_user(&send_data, (void*)data, sizeof(struct qnx_io_msgsendv)) == 0)
          {
             struct qnx_connection conn = qnx_process_entry_find_connection(QNX_PROC_ENTRY(f), send_data.coid);
             if (conn.coid)

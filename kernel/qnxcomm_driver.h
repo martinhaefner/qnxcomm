@@ -57,7 +57,7 @@ struct _pulse
 #endif   // __QNXCOMM_H
 
 
-struct io_attach
+struct qnx_io_attach
 {
    pid_t pid;
    int chid;
@@ -66,25 +66,17 @@ struct io_attach
 };
 
 
-// FIXME use iovec instead
-struct io_iov
-{
-   void* iov_base;
-   int   iov_len;
-};
-
-
-struct io_msgsend
+struct qnx_io_msgsend
 {
    int coid;
    int timeout_ms;    // timeout in milliseconds
       
-   struct io_iov in;
-   struct io_iov out;
+   struct iovec in;
+   struct iovec out;
 };
 
 
-struct io_msgsendv
+struct qnx_io_msgsendv
 {
    int coid;
    int timeout_ms;    // timeout in milliseconds
@@ -98,7 +90,7 @@ struct io_msgsendv
 
 
 
-struct io_msgsendpulse
+struct qnx_io_msgsendpulse
 {
    int coid;
    
@@ -107,39 +99,39 @@ struct io_msgsendpulse
 };
 
 
-struct io_receive
+struct qnx_io_receive
 {
    int chid;
    int timeout_ms;     // timeout in milliseconds
    
-   struct io_iov out;
+   struct iovec out;
    
    struct _msg_info info;
 };
 
 
-struct io_reply
+struct qnx_io_reply
 {
    int rcvid;
    int status;
    
-   struct io_iov in;
+   struct iovec in;
 };
 
 
-struct io_error_reply
+struct qnx_io_error_reply
 {
     int rcvid;
     int error;
 };
 
 
-struct io_read
+struct qnx_io_read
 {
     int rcvid;
     int offset;
     
-    struct io_iov out;
+    struct iovec out;
 };
 
 
@@ -149,18 +141,18 @@ struct io_read
 #define QNX_IO_CHANNELCREATE   _IO(QNXCOMM_MAGIC,  1)
 #define QNX_IO_CHANNELDESTROY _IOW(QNXCOMM_MAGIC,  2, int)
 
-#define QNX_IO_CONNECTATTACH  _IOW(QNXCOMM_MAGIC,  3, struct io_attach)
+#define QNX_IO_CONNECTATTACH  _IOW(QNXCOMM_MAGIC,  3, struct qnx_io_attach)
 #define QNX_IO_CONNECTDETACH  _IOW(QNXCOMM_MAGIC,  4, int)
 
-#define QNX_IO_MSGSEND        _IOW(QNXCOMM_MAGIC,  5, struct io_msgsend)
-#define QNX_IO_MSGSENDPULSE   _IOW(QNXCOMM_MAGIC,  6, struct io_msgsendpulse)
+#define QNX_IO_MSGSEND        _IOW(QNXCOMM_MAGIC,  5, struct qnx_io_msgsend)
+#define QNX_IO_MSGSENDPULSE   _IOW(QNXCOMM_MAGIC,  6, struct qnx_io_msgsendpulse)
 
-#define QNX_IO_MSGRECEIVE    _IOWR(QNXCOMM_MAGIC,  7, struct io_receive)
-#define QNX_IO_MSGREPLY       _IOW(QNXCOMM_MAGIC,  8, struct io_reply)
-#define QNX_IO_MSGERROR       _IOW(QNXCOMM_MAGIC,  9, struct io_error_reply)
-#define QNX_IO_MSGREAD        _IOW(QNXCOMM_MAGIC, 10, struct io_read)
+#define QNX_IO_MSGRECEIVE    _IOWR(QNXCOMM_MAGIC,  7, struct qnx_io_receive)
+#define QNX_IO_MSGREPLY       _IOW(QNXCOMM_MAGIC,  8, struct qnx_io_reply)
+#define QNX_IO_MSGERROR       _IOW(QNXCOMM_MAGIC,  9, struct qnx_io_error_reply)
+#define QNX_IO_MSGREAD        _IOW(QNXCOMM_MAGIC, 10, struct qnx_io_read)
 
-#define QNX_IO_MSGSENDV       _IOW(QNXCOMM_MAGIC, 11, struct io_msgsendv)
+#define QNX_IO_MSGSENDV       _IOW(QNXCOMM_MAGIC, 11, struct qnx_io_msgsendv)
 
 // FIXME add MsgReceivePulse and move them all to scatter gather versions
 

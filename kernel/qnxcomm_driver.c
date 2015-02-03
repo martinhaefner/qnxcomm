@@ -73,7 +73,7 @@ interrupted:
 	  //          or wait for finish (3)
 	  // FINISHED: MsgReply is called on the object, so we are free to continue (4)
 	  	  
-	  while(send_data->state == QNX_STATE_RECEIVING);   // (1) busy loop
+	  while(ACCESS_ONCE(send_data->state) == QNX_STATE_RECEIVING);   // (1) busy loop
 	  
       // object is already in processing
       entry = qnx_driver_data_find_process(&driver_data, send_data->receiver_pid);
@@ -86,7 +86,7 @@ interrupted:
 		 }
 		 else   
 		 {   			
-		    while(send_data->state == QNX_STATE_FINISHED);    // (3) busy loop
+		    while(ACCESS_ONCE(send_data->state) == QNX_STATE_FINISHED);    // (3) busy loop
 		    // finished (4)
 		 }
          

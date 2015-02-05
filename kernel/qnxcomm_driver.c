@@ -103,13 +103,51 @@ out:
 
 
 static
-int handle_msgsendpulse(struct qnx_channel* chnl, struct qnx_internal_msgsend* send_data)
+int handle_msgsendpulse(struct qnx_process_entry* entry, long data)
 {
-   qnx_channel_add_new_message(chnl, send_data);
+   int rc;
    
-   qnx_channel_release(chnl);
+   struct qnx_connection conn;
+   struct qnx_channel* chnl = 0;
+         
+   // must allocate data (or reuse some other object)...         
+   struct qnx_internal_msgsend* snddata = (struct qnx_internal_msgsend*)kmalloc(sizeof(struct qnx_internal_msgsend), GFP_USER);
+   if (unlikely(!snddata))          
+   {
+      rc = -ENOMEM;                    
+      goto out;
+   }
+         
+   rc = qnx_internal_msgsend_init_pulse(snddata, (struct qnx_io_msgsendpulse*)data, entry->pid);
+   if (unlikely(rc))
+      goto out_free;
+         
+   pr_debug("MsgSendPulse coid=%d\n", snddata->data.pulse.coid);
+   conn = qnx_process_entry_find_connection(entry, snddata->data.pulse.coid);         
+         
+   if (unlikely(!conn.coid))
+   {
+      rc = -EBADF;
+      goto out_free;
+   }
    
-   return 0;
+   chnl = qnx_driver_data_find_channel(entry->driver, conn.pid, conn.chid);
+   if (unlikely(!chnl))
+   {
+      rc = -EBADF;
+      goto out_free;
+   }         
+        
+   qnx_channel_add_new_message(chnl, snddata);   
+   qnx_channel_release(chnl);   
+   rc = 0;
+            
+out_free:
+   if (unlikely(rc != 0))
+      kfree(snddata);
+            
+out:            
+   return rc;
 }
 
 
@@ -168,7 +206,7 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
             
       recv_data->info.msglen = 2 * sizeof(int);
       recv_data->info.srcmsglen = 2 * sizeof(int);
-      recv_data->info.dstmsglen = sizeof(struct _pulse);
+      recv_data->info.dstmsglen = 0;
       
       if (recv_data->out.iov_len >= sizeof(struct _pulse))
       {      
@@ -223,16 +261,22 @@ int handle_msgreply(struct qnx_process_entry* entry, struct qnx_io_reply* data)
    struct qnx_internal_msgsend* send_data = qnx_process_entry_release_pending(entry, data->rcvid);
    if (likely(send_data))
    {
-      if (send_data->data.msg.out.iov_base && send_data->data.msg.out.iov_len > 0)
+      if (send_data->data.msg.out.iov_base 
+         && send_data->data.msg.out.iov_len > 0 
+         && data->in.iov_len > 0)
       {
-         send_data->reply.iov_base = kmalloc(data->in.iov_len, GFP_USER);
+         send_data->reply.iov_base = kmalloc(data->in.iov_len, GFP_USER);      
+         if (likely(send_data->reply.iov_base))
+         {
+            // TODO only copy bytes that can be read by client (min())
+            send_data->reply.iov_len = data->in.iov_len;
       
-         // TODO only copy bytes that can be read by client (min())
-         send_data->reply.iov_len = data->in.iov_len;
-      
-         // copy data
-         if (unlikely(copy_from_user(send_data->reply.iov_base, data->in.iov_base, data->in.iov_len)))
-            rc = -EFAULT;
+            // copy data
+            if (unlikely(copy_from_user(send_data->reply.iov_base, data->in.iov_base, data->in.iov_len)))
+                rc = -EFAULT;
+         }
+         else
+            rc = -ENOMEM;
       }
       else
       {         
@@ -295,7 +339,10 @@ int handle_msgread(struct qnx_process_entry* entry, struct qnx_io_read* data)
          {
             // copy data
             int bytes_to_copy = min(send_data->data.msg.in.iov_len - data->offset, data->out.iov_len);
-            if (copy_to_user(data->out.iov_base, send_data->data.msg.in.iov_base + data->offset, bytes_to_copy) == 0)
+            
+            if (likely(copy_to_user(data->out.iov_base, 
+                                    send_data->data.msg.in.iov_base + data->offset, 
+                                    bytes_to_copy) == 0))
                rc = bytes_to_copy;
             else
                rc = -EFAULT;
@@ -317,6 +364,102 @@ out:
 }
 
 
+static
+int handle_msgsendv(struct qnx_process_entry* entry, long data)
+{
+   int rc;
+   
+   struct qnx_io_msgsendv send_data = { 0 };
+   struct qnx_connection conn;
+   struct qnx_channel* chnl;
+   struct qnx_internal_msgsend snddata;
+
+   struct iovec buf_in[QNX_MAX_IOVEC_LEN];
+   struct iovec buf_out[QNX_MAX_IOVEC_LEN];
+
+   struct iovec* in = buf_in;
+   struct iovec* out = buf_out;
+
+   if (copy_from_user(&send_data, (void*)data, sizeof(struct qnx_io_msgsendv)))
+   {
+      rc = -EFAULT;
+      goto out; 
+   }
+   
+   if (unlikely(send_data.in_len > QNX_MAX_IOVEC_LEN))
+   {            
+      if (unlikely(!(in = (struct iovec*)kmalloc(sizeof(struct iovec) * send_data.in_len, GFP_USER))))
+      {
+         rc = -ENOMEM;
+         goto out;
+      }
+   }         
+
+   if (unlikely(send_data.out_len > QNX_MAX_IOVEC_LEN))
+   {
+      if (unlikely(!(out = (struct iovec*)kmalloc(sizeof(struct iovec) * send_data.out_len, GFP_USER))))
+      {         
+         rc = -ENOMEM;
+         goto out_clean_in;
+      }
+   }
+                                      
+   if (unlikely(copy_from_user(in, send_data.in, sizeof(struct iovec) * send_data.in_len)
+      || copy_from_user(out, send_data.out, sizeof(struct iovec) * send_data.out_len)))                  
+   {
+      rc = -EFAULT;
+      goto out_clean_out;
+   }
+   
+   // replace the pointers...
+   send_data.in = in;
+   send_data.out = out;
+
+   conn = qnx_process_entry_find_connection(entry, send_data.coid);
+   if (unlikely(!conn.coid))
+   {
+      rc = -EBADF;
+      goto out_clean_out;
+   }
+
+   chnl = qnx_driver_data_find_channel(entry->driver, conn.pid, conn.chid);
+   if (unlikely(!chnl))
+   {
+      rc = -EBADF;
+      goto out_clean_out;
+   }    
+
+   if (unlikely((rc = qnx_internal_msgsend_initv(&snddata, &send_data, entry->pid))))
+      goto out_clean_out;  
+
+   snddata.receiver_pid = conn.pid;         
+
+   rc = handle_msgsend(chnl, &snddata);                                    
+   // do not access chnl any more from here
+
+   // copy data back to userspace - if buffer is provided
+   if (rc >= 0 && snddata.reply.iov_len > 0)
+   {
+      size_t bytes_to_copy = min(snddata.data.msg.out.iov_len, snddata.reply.iov_len);   
+
+      if (memcpy_toiovec(out, snddata.reply.iov_base, bytes_to_copy))
+         rc = -EFAULT;
+   }
+
+   qnx_internal_msgsend_destroyv(&snddata);
+    
+out_clean_out:
+   if (out != buf_out && out != 0)
+      kfree(out);
+
+out_clean_in:    
+   if (in != buf_in && in != 0)
+      kfree(in);
+   
+out:    
+   return rc;
+}
+
 // -----------------------------------------------------------------------------
 
 
@@ -326,7 +469,7 @@ int qnxcomm_open(struct inode* n, struct file* f)
    if (!qnx_driver_data_is_process_available(&driver_data, current_get_pid_nr(current)))
    {
       struct qnx_process_entry* entry = (struct qnx_process_entry*)kmalloc(sizeof(struct qnx_process_entry), GFP_USER);
-      if (entry)
+      if (likely(entry))
       {
          qnx_process_entry_init(entry, &driver_data);
       
@@ -423,7 +566,7 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
          
          printk("MsgSend coid=%d\n", snddata.data.msg.coid);
          
-         chnl = qnx_driver_data_find_channel(&driver_data, conn.pid, conn.chid);
+         chnl = qnx_driver_data_find_channel(QNX_PROC_ENTRY(f)->driver, conn.pid, conn.chid);
          if (unlikely(!chnl))
          {
             rc = -EBADF;
@@ -452,33 +595,7 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
       break;
    
    case QNX_IO_MSGSENDPULSE:      
-      {
-         struct qnx_connection conn;
-         struct qnx_channel* chnl = 0;
-         
-         // must allocate data (or reuse some other object)...         
-         struct qnx_internal_msgsend* snddata = (struct qnx_internal_msgsend*)kmalloc(sizeof(struct qnx_internal_msgsend), GFP_USER);
-         if (unlikely(!snddata))          
-         {
-            rc = -ENOMEM;                    
-            break;
-         }
-                     
-         if (unlikely((rc = qnx_internal_msgsend_init_pulse(snddata, (struct qnx_io_msgsendpulse*)data, QNX_PROC_ENTRY(f)->pid)) == 0))
-         {                  
-            pr_debug("MsgSendPulse coid=%d\n", snddata->data.pulse.coid);
-            conn = qnx_process_entry_find_connection(QNX_PROC_ENTRY(f), snddata->data.pulse.coid);         
-                     
-            if (!conn.coid || (chnl = qnx_driver_data_find_channel(&driver_data, conn.pid, conn.chid)) == 0)    
-               rc = -EBADF;
-
-            if (likely(chnl))
-               rc = handle_msgsendpulse(chnl, snddata);        
-         }
-         
-         if (unlikely(rc != 0))         
-            kfree(snddata);         
-      }      
+      rc = handle_msgsendpulse(QNX_PROC_ENTRY(f), data);
       break;
       
    case QNX_IO_MSGRECEIVE:      
@@ -547,62 +664,8 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
       }      
       break;
 
-   case QNX_IO_MSGSENDV:      
-      {
-         struct qnx_io_msgsendv send_data = { 0 };
-      
-         if (copy_from_user(&send_data, (void*)data, sizeof(struct qnx_io_msgsendv)) == 0)
-         {
-            struct qnx_connection conn = qnx_process_entry_find_connection(QNX_PROC_ENTRY(f), send_data.coid);
-            if (conn.coid)
-            {
-               struct qnx_channel* chnl = qnx_driver_data_find_channel(&driver_data, conn.pid, conn.chid);
-               if (chnl)
-               {
-                  struct iovec in[send_data.in_len];
-                  struct iovec out[send_data.out_len];
-                  
-                  struct qnx_internal_msgsend snddata;
-                                                      
-                  if (copy_from_user(in, send_data.in, sizeof(in)) == 0
-                     && copy_from_user(out, send_data.out, sizeof(out)) == 0)                  
-                  {
-                     send_data.in = in;
-                     send_data.out = out;                                    
-
-                     if (!qnx_internal_msgsend_initv(&snddata, &send_data, QNX_PROC_ENTRY(f)->pid))
-                     {
-                        snddata.receiver_pid = conn.pid;
-                  
-                        rc = handle_msgsend(chnl, &snddata);                                    
-                        // do not access chnl any more from here
-                        
-                        // copy data back to userspace - if buffer is provided
-                        if (rc >= 0 && snddata.reply.iov_len > 0)
-                        {
-                           size_t bytes_to_copy = min(snddata.data.msg.out.iov_len, snddata.reply.iov_len);   
-                           
-                           if (memcpy_toiovec(out, snddata.reply.iov_base, bytes_to_copy))
-                              rc = -EFAULT;
-                        }
-                        
-                        qnx_internal_msgsend_destroyv(&snddata);
-                     }
-                     else
-                        rc = -EFAULT;
-                  }
-                  else
-                     rc = -EFAULT;
-               }
-               else
-                  rc = -EBADF;
-            }
-            else
-               rc = -EBADF;
-         }
-         else
-            rc = -EFAULT;
-      }
+   case QNX_IO_MSGSENDV:            
+      rc = handle_msgsendv(QNX_PROC_ENTRY(f), data);      
       break;      
       
    default:

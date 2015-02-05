@@ -3,3 +3,5 @@ kernel module.
 
 To create Makefiles you need gtest framework (tested with 1.7.0)
 from google and then call "update.sh" in the projects root directory.
+
+Make sure to run the tests from within the build/tests subdirectory.

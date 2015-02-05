@@ -52,7 +52,7 @@ int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_
    
    memset(&data->reply, 0, sizeof(data->reply));
    
-   data->task = 0;   
+   data->task = current; 
    data->state = QNX_STATE_INITIAL;
    
    rc = 0;

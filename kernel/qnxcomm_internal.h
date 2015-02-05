@@ -30,6 +30,8 @@
 #define QNX_STATE_PENDING     2
 #define QNX_STATE_FINISHED    3
 
+#define QNX_MAX_IOVEC_LEN     5
+
 
 struct qnx_internal_msgsend
 {

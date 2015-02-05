@@ -15,11 +15,17 @@ void receiverthread(int chid)
    EXPECT_EQ(42, pulse.code);   
    EXPECT_EQ(4711, pulse.value.sival_int);   
    
-   // FIXME check also msginfo
-   rcvid = MsgReceive(chid, &pulse, sizeof(pulse), 0);
+   struct _msg_info info;
+   rcvid = MsgReceive(chid, &pulse, sizeof(pulse), &info);
    EXPECT_EQ(0, rcvid);   
    EXPECT_EQ(42, pulse.code);   
    EXPECT_EQ(4712, pulse.value.sival_int);   
+   
+   EXPECT_EQ(0, info.nd);
+   EXPECT_EQ(::getpid(), info.pid);   
+   EXPECT_EQ(8, info.msglen);
+   EXPECT_EQ(8, info.srcmsglen);
+   EXPECT_EQ(0, info.dstmsglen);   
    
    int rc = MsgReply(rcvid, 0, 0, 0);   
    EXPECT_EQ(-1, rc);

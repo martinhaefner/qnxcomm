@@ -19,7 +19,7 @@ struct _msg_info
 {
    uint32_t  nd;         ///< client node address, always 0    
    pid_t     pid;        ///< sending clients pid      
-   int32_t   tid;        ///< sending client thread tid (TOD   O currently unset)
+   int32_t   tid;        ///< sending client thread tid (TODO currently unset)
    int32_t   chid;       ///< chid which receives the message
    int32_t   scoid;      ///< (sender) connection id as seen by the client
    int32_t   coid;       ///< connection id as seen by the server (same as scoid)

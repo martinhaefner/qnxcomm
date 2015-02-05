@@ -105,13 +105,14 @@ int TimerTimeout(clockid_t id, int flags, const struct sigevent * notify, const 
 
 
 extern "C" 
-int ChannelCreate(unsigned /*flags*/)
-{
+int ChannelCreate(unsigned flags)
+{   
    int rc = -1;
    
    if (fd >= 0)
-   { 
-      rc = ioctl(fd, QNX_IO_CHANNELCREATE);
+   { 	  
+	  struct qnx_io_channelcreate data = { flags };
+      rc = ioctl(fd, QNX_IO_CHANNELCREATE, &data);
    }
    else
       errno = ESRCH;

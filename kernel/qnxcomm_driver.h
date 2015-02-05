@@ -57,6 +57,12 @@ struct _pulse
 #endif   // __QNXCOMM_H
 
 
+struct qnx_io_channelcreate
+{
+	unsigned int flags;
+};
+
+
 struct qnx_io_attach
 {
    pid_t pid;
@@ -138,7 +144,7 @@ struct qnx_io_read
 #define QNXCOMM_MAGIC 'q'
 
 
-#define QNX_IO_CHANNELCREATE   _IO(QNXCOMM_MAGIC,  1)
+#define QNX_IO_CHANNELCREATE  _IOW(QNXCOMM_MAGIC,  1, struct qnx_io_channelcreate)
 #define QNX_IO_CHANNELDESTROY _IOW(QNXCOMM_MAGIC,  2, int)
 
 #define QNX_IO_CONNECTATTACH  _IOW(QNXCOMM_MAGIC,  3, struct qnx_io_attach)

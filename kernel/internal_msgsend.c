@@ -26,14 +26,14 @@ int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_
    void* outbuf;
    
    inbuf = kmalloc(inlen, GFP_USER);   
-   if (!inbuf)
+   if (unlikely(!inbuf))
       goto out;
       
    outbuf = kmalloc(outlen, GFP_USER);   
-   if (!outbuf)
+   if (unlikely(!outbuf))
       goto out_free_inbuf;
          
-   if (memcpy_fromiovec(inbuf, _iov->in, inlen))
+   if (unlikely(memcpy_fromiovec(inbuf, _iov->in, inlen)))
       goto out_free_all;
       
    data->rcvid = get_new_rcvid();   
@@ -74,14 +74,14 @@ int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_m
 {        
    void* buf = 0;
    
-   if (copy_from_user(&data->data.msg, io, sizeof(struct qnx_io_msgsend)))
+   if (unlikely(copy_from_user(&data->data.msg, io, sizeof(struct qnx_io_msgsend))))
       return -EFAULT;
       
    buf = kmalloc(data->data.msg.in.iov_len, GFP_USER);
-   if (!buf)
+   if (unlikely(!buf))
       return -ENOMEM;
    
-   if (copy_from_user(buf, data->data.msg.in.iov_base, data->data.msg.in.iov_len))
+   if (unlikely(copy_from_user(buf, data->data.msg.in.iov_base, data->data.msg.in.iov_len)))
    {
       kfree(buf);
       return -EFAULT;
@@ -104,7 +104,7 @@ int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_m
 
 int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid)
 {
-   if (copy_from_user(&data->data, io, sizeof(struct qnx_io_msgsendpulse)))
+   if (unlikely(copy_from_user(&data->data, io, sizeof(struct qnx_io_msgsendpulse))))
       return -EFAULT;
 
    data->rcvid = 0;     // is a pulse

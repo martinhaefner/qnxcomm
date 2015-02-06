@@ -23,7 +23,8 @@ void qnx_driver_data_add_process(struct qnx_driver_data* data, struct qnx_proces
 struct qnx_process_entry* qnx_driver_data_find_process(struct qnx_driver_data* data, pid_t pid)
 {      
    struct qnx_process_entry* entry;
-   printk("searching process %d\n", pid);
+   pr_debug("searching process %d\n", pid);
+   
    down_read(&data->process_entries_lock);
    
    list_for_each_entry(entry, &data->process_entries, hook)
@@ -71,7 +72,7 @@ void qnx_driver_data_remove(struct qnx_driver_data* data, pid_t pid)
 {
    struct list_head *iter;
 
-   printk("remove for pid=%d tid=%d, tgid=%d\n", pid, current->pid, current->tgid);
+   pr_debug("remove for pid=%d tid=%d, tgid=%d\n", pid, current->pid, current->tgid);
    
    down_write(&data->process_entries_lock);
    

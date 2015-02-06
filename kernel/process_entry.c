@@ -26,14 +26,14 @@ void qnx_process_entry_free(struct kref* refcount)
    // FIXME splice the lists in order to reduce lock contention and delete offline   
    struct list_head *iter, *next;
 
-   printk("qnx_process_entry_free called\n");
+   pr_debug("qnx_process_entry_free called\n");
  
    down_write(&entry->channels_lock);
    
    while(!list_empty(&entry->channels))
    {
       struct qnx_channel* chnl;
-      printk("releasing channel...\n");
+      pr_debug("releasing channel...\n");
  
       chnl = list_first_entry(&entry->channels, struct qnx_channel, hook);
       list_del(&chnl->hook);
@@ -43,13 +43,13 @@ void qnx_process_entry_free(struct kref* refcount)
    
    up_write(&entry->channels_lock);
    
-   printk("channels done\n");
+   pr_debug("channels done\n");
  
    down(&entry->pending_lock);
    
    list_for_each_safe(iter, next, &entry->pending)
    {  
-      printk("pending...\n");
+      pr_debug("pending...\n");
      
       qnx_internal_msgsend_cleanup_and_free(list_entry(iter, struct qnx_internal_msgsend, hook));
       list_del(iter);      
@@ -57,14 +57,14 @@ void qnx_process_entry_free(struct kref* refcount)
    
    up(&entry->pending_lock);  
    
-   printk("pendings done\n");
+   pr_debug("pendings done\n");
  
    down_write(&entry->connections_lock);
    
    while(!list_empty(&entry->connections))
    {
       struct qnx_connection* conn;
-      printk("connection...\n");
+      pr_debug("connection...\n");
  
       conn = list_first_entry(&entry->connections, struct qnx_connection, hook);
       list_del(&conn->hook);
@@ -74,11 +74,11 @@ void qnx_process_entry_free(struct kref* refcount)
 
    up_write(&entry->connections_lock); 
    
-   printk("finished\n");
+   pr_debug("finished\n");
  
    kfree(entry);
    
-   printk("really finished\n");
+   pr_debug("really finished\n");
 }
 
 

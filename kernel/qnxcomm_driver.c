@@ -5,11 +5,8 @@
 
 #include "qnxcomm_internal.h"
 
-
 // TODO what about forking to another process?
-// TODO use likely() in order to enhance performance
-// TODO make sure the correct errnos are returned on error conditions
-
+// TODO make sure to handle responses correctly when MsgReceive, MsgReply or MsgError have problems...
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Martin Haefner");
@@ -17,13 +14,18 @@ MODULE_DESCRIPTION("QNX like message passing for the Linux kernel");
 
 
 #define QNX_PROC_ENTRY(f) ((struct qnx_process_entry*)f->private_data)
+#define QNX_CONN_IS_VALID(conn) (conn.coid > 0)
 
-static 
-struct qnx_driver_data driver_data;
+
+static struct qnx_driver_data driver_data;
+static dev_t dev_number;
+static struct cdev* instance;
+static struct class* the_class;
+static struct device* dev;
 
 
 static
-int handle_msgsend(struct qnx_channel* chnl, struct qnx_internal_msgsend* send_data)
+int handle_msgsend_internal(struct qnx_channel* chnl, struct qnx_internal_msgsend* send_data)
 {   
    int rc;
    
@@ -125,7 +127,7 @@ int handle_msgsendpulse(struct qnx_process_entry* entry, long data)
    pr_debug("MsgSendPulse coid=%d\n", snddata->data.pulse.coid);
    conn = qnx_process_entry_find_connection(entry, snddata->data.pulse.coid);         
          
-   if (unlikely(!conn.coid))
+   if (unlikely(!QNX_CONN_IS_VALID(conn)))
    {
       rc = -EBADF;
       goto out_free;
@@ -140,35 +142,53 @@ int handle_msgsendpulse(struct qnx_process_entry* entry, long data)
         
    qnx_channel_add_new_message(chnl, snddata);   
    qnx_channel_release(chnl);   
+   
    rc = 0;
+   goto out;
             
 out_free:
-   if (unlikely(rc != 0))
-      kfree(snddata);
+
+   kfree(snddata);
             
 out:            
+
    return rc;
 }
 
 
 static
-int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl, struct qnx_io_receive* recv_data)
+int handle_msgreceive(struct qnx_process_entry* entry, long data)
 {
-   int ret;
-   void* ptr;
+   int rc;
+   struct qnx_io_receive recv_data = { 0 };
+   struct qnx_channel* chnl;
    struct qnx_internal_msgsend* send_data;
+   void* ptr;
    size_t bytes_to_copy;      
-   
-   int rc = wait_event_interruptible_timeout(chnl->waiting_queue, 
-               atomic_add_unless(&chnl->num_waiting, -1, 0) > 0, 
-               msecs_to_jiffies(recv_data->timeout_ms));
+      
+   if (unlikely(copy_from_user(&recv_data, (void*)data, sizeof(struct qnx_io_receive))))
+   {   
+      rc = -EFAULT;
+      goto out;
+   }        
+                   
+   chnl = qnx_process_entry_find_channel(entry, recv_data.chid);
+   if (unlikely(!chnl))
+   {
+      rc = -EBADF;
+      goto out;
+   }
+        
+   rc = wait_event_interruptible_timeout(chnl->waiting_queue, 
+        atomic_add_unless(&chnl->num_waiting, -1, 0) > 0, 
+        msecs_to_jiffies(recv_data.timeout_ms));
    
    pr_debug("handle msgreceive rc=%d, num_waiting=%d\n", rc, atomic_read(&chnl->num_waiting));
    
    if (unlikely(rc < 0))
    {
-      ret = -ERESTARTSYS;
-      goto out;
+      rc = -ERESTARTSYS;
+      goto out_channel_release;
    }
    
    down(&chnl->waiting_lock);
@@ -177,11 +197,11 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
    // empty?! FIXME maybe spurious wakeup here?!
    if (ptr == &chnl->waiting)
    {
-      printk("Empty...\n");
+      pr_debug("Empty...\n");
       up(&chnl->waiting_lock);      
       
-      ret = -ETIMEDOUT;
-      goto out;
+      rc = -ETIMEDOUT;
+      goto out_channel_release;
    }
    
    send_data = list_entry(ptr, struct qnx_internal_msgsend, hook);   
@@ -191,65 +211,97 @@ int handle_msgreceive(struct qnx_process_entry* entry, struct qnx_channel* chnl,
    up(&chnl->waiting_lock);
    
    // assign meta information
-   memset(&recv_data->info, 0, sizeof(struct _msg_info));   
+   memset(&recv_data.info, 0, sizeof(struct _msg_info));   
    
-   recv_data->info.pid = send_data->sender_pid;               
-   recv_data->info.chid = chnl->chid;   
+   recv_data.info.pid = send_data->sender_pid;               
+   recv_data.info.chid = chnl->chid;   
    
    // pulse or message?
    if (send_data->rcvid == 0)
    {      
-      pr_debug("pulse\n");
+      pr_debug("handling pulse\n");
       
-      recv_data->info.scoid = send_data->data.pulse.coid;            
-      recv_data->info.coid = send_data->data.pulse.coid;      
+      recv_data.info.scoid = send_data->data.pulse.coid;            
+      recv_data.info.coid = send_data->data.pulse.coid;      
             
-      recv_data->info.msglen = 2 * sizeof(int);
-      recv_data->info.srcmsglen = 2 * sizeof(int);
-      recv_data->info.dstmsglen = 0;
+      recv_data.info.msglen = 2 * sizeof(int);
+      recv_data.info.srcmsglen = 2 * sizeof(int);
+      recv_data.info.dstmsglen = 0;
       
-      if (recv_data->out.iov_len >= sizeof(struct _pulse))
+      if (recv_data.out.iov_len >= sizeof(struct _pulse))
       {      
-         struct _pulse* pulse = (struct _pulse*)recv_data->out.iov_base;         
+         struct _pulse* pulse = (struct _pulse*)recv_data.out.iov_base;         
          
          int8_t code = send_data->data.pulse.code;         
          int value = send_data->data.pulse.value;
          int32_t scoid = send_data->data.pulse.coid;      
          
-         if (put_user(code, &pulse->code) || put_user(scoid, &pulse->scoid) || copy_to_user(&pulse->value, &value, sizeof(int)))
-            ret = -EFAULT;         
+         if (put_user(code, &pulse->code) 
+            || put_user(scoid, &pulse->scoid) 
+            || copy_to_user(&pulse->value, &value, sizeof(int)))
+         {
+            rc = -EFAULT;
+         }
          else
-            ret = 0;
+            rc = 0;
       }      
       
       kfree(send_data);
+      send_data = 0;
    }
    else
    {
-      pr_debug("message\n");
+      pr_debug("handling message\n");
       
-      recv_data->info.scoid = send_data->data.msg.coid;      
-      recv_data->info.coid = send_data->data.msg.coid;      
+      recv_data.info.scoid = send_data->data.msg.coid;      
+      recv_data.info.coid = send_data->data.msg.coid;      
       
-      recv_data->info.msglen = send_data->data.msg.in.iov_len;      
-      recv_data->info.srcmsglen = send_data->data.msg.in.iov_len;      
-      recv_data->info.dstmsglen = send_data->data.msg.out.iov_len;
+      recv_data.info.msglen = send_data->data.msg.in.iov_len;      
+      recv_data.info.srcmsglen = send_data->data.msg.in.iov_len;      
+      recv_data.info.dstmsglen = send_data->data.msg.out.iov_len;
             
       // copy data
-      bytes_to_copy = min(send_data->data.msg.in.iov_len, recv_data->out.iov_len);
+      bytes_to_copy = min(send_data->data.msg.in.iov_len, recv_data.out.iov_len);
       
-      if (unlikely(copy_to_user(recv_data->out.iov_base, send_data->data.msg.in.iov_base, bytes_to_copy)))
-         ret = -EFAULT;
+      if (unlikely(copy_to_user(recv_data.out.iov_base, send_data->data.msg.in.iov_base, bytes_to_copy)))
+      {
+         rc = -EFAULT;
+      }
       else
-         ret = send_data->rcvid;
-      
-      qnx_process_entry_add_pending(entry, send_data);
+         rc = send_data->rcvid;
    } 
    
-out:
-   qnx_channel_release(chnl);
+   if (rc >= 0 && copy_to_user((void*)data, &recv_data, sizeof(struct qnx_io_receive)))
+      rc = -EFAULT;
+      
+   if (send_data)
+   {
+      if (likely(rc > 0))
+      {
+         qnx_process_entry_add_pending(entry, send_data);
+      }
+      else 
+      {
+         send_data->reply.iov_base = 0;
+         send_data->reply.iov_len = 0;
+         
+         send_data->status = rc;
+         send_data->state = QNX_STATE_FINISHED;            
+
+         // wake up the waiting process
+         wake_up_process(send_data->task);            
+      }
+   }
+              
+   pr_debug("MsgReceive finished rcvid=%d\n", rc);  
    
-   return ret;
+out_channel_release:
+
+   qnx_channel_release(chnl);
+
+out:
+   
+   return rc;
 }
 
 
@@ -265,15 +317,18 @@ int handle_msgreply(struct qnx_process_entry* entry, struct qnx_io_reply* data)
          && send_data->data.msg.out.iov_len > 0 
          && data->in.iov_len > 0)
       {
+         send_data->reply.iov_len = 0;
          send_data->reply.iov_base = kmalloc(data->in.iov_len, GFP_USER);      
+         
          if (likely(send_data->reply.iov_base))
-         {
-            // TODO only copy bytes that can be read by client (min())
-            send_data->reply.iov_len = data->in.iov_len;
-      
+         {      
             // copy data
-            if (unlikely(copy_from_user(send_data->reply.iov_base, data->in.iov_base, data->in.iov_len)))
-                rc = -EFAULT;
+            if (likely(copy_from_user(send_data->reply.iov_base, data->in.iov_base, data->in.iov_len)) == 0)
+            {
+               send_data->reply.iov_len = data->in.iov_len;
+            }
+            else
+               rc = -EFAULT;
          }
          else
             rc = -ENOMEM;
@@ -284,7 +339,7 @@ int handle_msgreply(struct qnx_process_entry* entry, struct qnx_io_reply* data)
          send_data->reply.iov_len = 0;
       }
       
-      send_data->status = data->status;
+      send_data->status = rc < 0 ? rc : data->status;
       send_data->state = QNX_STATE_FINISHED;            
 
       // wake up the waiting process
@@ -342,8 +397,10 @@ int handle_msgread(struct qnx_process_entry* entry, struct qnx_io_read* data)
             
             if (likely(copy_to_user(data->out.iov_base, 
                                     send_data->data.msg.in.iov_base + data->offset, 
-                                    bytes_to_copy) == 0))
+                                    bytes_to_copy) == 0)) 
+            {
                rc = bytes_to_copy;
+            }
             else
                rc = -EFAULT;
          }
@@ -360,6 +417,59 @@ out:
 
    up(&entry->pending_lock);
          
+   return rc;
+}
+
+
+static
+int handle_msgsend(struct qnx_process_entry* entry, long data)
+{
+   int rc;
+   struct qnx_internal_msgsend snddata;
+   struct qnx_connection conn;
+   struct qnx_channel* chnl;
+
+   if (unlikely((rc = qnx_internal_msgsend_init(&snddata, (struct qnx_io_msgsend*)data, entry->pid))))         
+      goto out;
+
+   conn = qnx_process_entry_find_connection(entry, snddata.data.msg.coid);              
+   if (unlikely(!QNX_CONN_IS_VALID(conn)))
+   {
+      rc = -EBADF;
+      goto out_destroy;
+   }   
+
+   pr_debug("MsgSend coid=%d\n", snddata.data.msg.coid);
+
+   chnl = qnx_driver_data_find_channel(entry->driver, conn.pid, conn.chid);
+   if (unlikely(!chnl))
+   {
+      rc = -EBADF;
+      goto out_destroy;
+   }
+         
+   snddata.receiver_pid = conn.pid;
+            
+   rc = handle_msgsend_internal(chnl, &snddata);                  
+   // do not access chnl any more from here
+
+   pr_debug("MsgSend finished rc=%d\n", rc);
+
+   // copy data back to userspace - if buffer is provided
+   if (rc >= 0 && snddata.reply.iov_len > 0)
+   {
+      size_t bytes_to_copy = min(snddata.data.msg.out.iov_len, snddata.reply.iov_len);
+      
+      if (copy_to_user(snddata.data.msg.out.iov_base, snddata.reply.iov_base, bytes_to_copy))
+         rc = -EFAULT;
+   }               
+
+out_destroy:
+       
+   qnx_internal_msgsend_destroy(&snddata);
+   
+out:
+
    return rc;
 }
 
@@ -416,7 +526,7 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data)
    send_data.out = out;
 
    conn = qnx_process_entry_find_connection(entry, send_data.coid);
-   if (unlikely(!conn.coid))
+   if (unlikely(!QNX_CONN_IS_VALID(conn)))
    {
       rc = -EBADF;
       goto out_clean_out;
@@ -434,7 +544,7 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data)
 
    snddata.receiver_pid = conn.pid;         
 
-   rc = handle_msgsend(chnl, &snddata);                                    
+   rc = handle_msgsend_internal(chnl, &snddata);                                    
    // do not access chnl any more from here
 
    // copy data back to userspace - if buffer is provided
@@ -449,10 +559,12 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data)
    qnx_internal_msgsend_destroyv(&snddata);
     
 out_clean_out:
+
    if (out != buf_out && out != 0)
       kfree(out);
 
 out_clean_in:    
+
    if (in != buf_in && in != 0)
       kfree(in);
    
@@ -466,24 +578,23 @@ out:
 static
 int qnxcomm_open(struct inode* n, struct file* f)
 {
-   if (!qnx_driver_data_is_process_available(&driver_data, current_get_pid_nr(current)))
-   {
-      struct qnx_process_entry* entry = (struct qnx_process_entry*)kmalloc(sizeof(struct qnx_process_entry), GFP_USER);
-      if (likely(entry))
-      {
-         qnx_process_entry_init(entry, &driver_data);
-      
-         f->private_data = entry;
-         qnx_driver_data_add_process(&driver_data, entry);
-      
-         pr_info("Open called from pid=%d\n", current_get_pid_nr(current));
-         return 0;
-      }
-      else
-         return -ENOMEM;
-   }
-   else
+   struct qnx_process_entry* entry;
+   
+   if (qnx_driver_data_is_process_available(&driver_data, current_get_pid_nr(current)))
       return -ENOSPC;
+   
+   entry = (struct qnx_process_entry*)kmalloc(sizeof(struct qnx_process_entry), GFP_USER);
+   if (unlikely(!entry))
+      return -ENOMEM;
+      
+   qnx_process_entry_init(entry, &driver_data);
+
+   f->private_data = entry;
+   qnx_driver_data_add_process(&driver_data, entry);
+
+   pr_info("Open called from pid=%d\n", current_get_pid_nr(current));
+   
+   return 0;
 }
 
 
@@ -548,50 +659,7 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
       break;
       
    case QNX_IO_MSGSEND:         
-      {
-         struct qnx_internal_msgsend snddata;
-         struct qnx_connection conn;
-         struct qnx_channel* chnl;
-         
-         if (unlikely((rc = qnx_internal_msgsend_init(&snddata, (struct qnx_io_msgsend*)data, QNX_PROC_ENTRY(f)->pid))))         
-            break;
-         
-         conn = qnx_process_entry_find_connection(QNX_PROC_ENTRY(f), snddata.data.msg.coid);              
-         if (unlikely(!conn.coid))
-         {
-            rc = -EBADF;
-            qnx_internal_msgsend_destroy(&snddata);         
-            break;
-         }   
-         
-         printk("MsgSend coid=%d\n", snddata.data.msg.coid);
-         
-         chnl = qnx_driver_data_find_channel(QNX_PROC_ENTRY(f)->driver, conn.pid, conn.chid);
-         if (unlikely(!chnl))
-         {
-            rc = -EBADF;
-            qnx_internal_msgsend_destroy(&snddata);         
-            break;
-         }
-               
-         snddata.receiver_pid = conn.pid;
-                  
-         rc = handle_msgsend(chnl, &snddata);                  
-         // do not access chnl any more from here
-
-         printk("MsgSend finished rc=%d\n", rc);
-         
-         // copy data back to userspace - if buffer is provided
-         if (rc >= 0 && snddata.reply.iov_len > 0)
-         {
-            size_t bytes_to_copy = min(snddata.data.msg.out.iov_len, snddata.reply.iov_len);
-            
-            if (copy_to_user(snddata.data.msg.out.iov_base, snddata.reply.iov_base, bytes_to_copy))
-               rc = -EFAULT;
-         }               
-             
-         qnx_internal_msgsend_destroy(&snddata);         
-      }      
+      rc = handle_msgsend(QNX_PROC_ENTRY(f), data);
       break;
    
    case QNX_IO_MSGSENDPULSE:      
@@ -599,30 +667,7 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
       break;
       
    case QNX_IO_MSGRECEIVE:      
-      {
-         struct qnx_io_receive recv_data = { 0 };
-         struct qnx_channel* chnl;
-      
-         if (unlikely(copy_from_user(&recv_data, (void*)data, sizeof(struct qnx_io_receive))))
-         {   
-            rc = -EFAULT;
-            break;
-         }        
-                   
-         chnl = qnx_process_entry_find_channel(QNX_PROC_ENTRY(f), recv_data.chid);
-         if (unlikely(!chnl))
-         {
-            rc = -EBADF;
-            break;
-         }
-        
-         rc = handle_msgreceive(QNX_PROC_ENTRY(f), chnl, &recv_data);
-           
-         if (rc >= 0 && copy_to_user((void*)data, &recv_data, sizeof(struct qnx_io_receive)))
-            rc = -EFAULT;
-              
-         printk("MsgReceive finished rcvid=%d\n", rc);      
-      }      
+      rc = handle_msgreceive(QNX_PROC_ENTRY(f), data);
       break;
    
    case QNX_IO_MSGREPLY:      
@@ -684,12 +729,6 @@ struct file_operations fops = {
    .compat_ioctl = &qnxcomm_ioctl,
    .release = &qnxcomm_close
 };
-
-
-static dev_t dev_number;
-static struct cdev* instance;
-static struct class* the_class;
-static struct device* dev;
 
 
 static

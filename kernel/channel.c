@@ -36,13 +36,13 @@ void qnx_channel_free(struct kref* refcount)
    struct list_head* iter;
    struct list_head* next;
 
-   printk("qnx_channel_free called\n");
+   pr_debug("qnx_channel_free called\n");
 
    down(&chnl->waiting_lock);
    
    list_for_each_safe(iter, next, &chnl->waiting)
    {      
-      printk("Removing pending entry\n");
+      pr_debug("Removing pending entry\n");
       qnx_internal_msgsend_cleanup_and_free(list_entry(iter, struct qnx_internal_msgsend, hook));
       list_del(iter);      
    }

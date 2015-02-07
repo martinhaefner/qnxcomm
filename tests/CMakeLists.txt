@@ -17,6 +17,7 @@ add_executable(unittests
    msgsendpulse.cpp
    timeout.cpp
    servercrash.cpp
+   multithreaded.cpp
 )
 
 add_executable(testapp testapp.cpp )

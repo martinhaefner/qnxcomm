@@ -22,7 +22,7 @@ int qnx_channel_init(struct qnx_channel* chnl)
    
    init_waitqueue_head(&chnl->waiting_queue);
    
-   sema_init(&chnl->waiting_lock, 1);
+   spin_lock_init(&chnl->waiting_lock);
    
    return chnl->chid;
 }
@@ -36,9 +36,9 @@ void qnx_channel_free(struct kref* refcount)
    struct list_head* iter;
    struct list_head* next;
 
-   pr_debug("qnx_channel_free called\n");
+   printk("qnx_channel_free called\n");
 
-   down(&chnl->waiting_lock);
+   spin_lock(&chnl->waiting_lock);
    
    list_for_each_safe(iter, next, &chnl->waiting)
    {      
@@ -47,7 +47,7 @@ void qnx_channel_free(struct kref* refcount)
       list_del(iter);      
    }
    
-   up(&chnl->waiting_lock);   
+   spin_unlock(&chnl->waiting_lock);   
 
    kfree(chnl);
 }
@@ -61,11 +61,12 @@ void qnx_channel_release(struct qnx_channel* chnl)
 
 int qnx_channel_add_new_message(struct qnx_channel* chnl, struct qnx_internal_msgsend* data)
 {
-   down(&chnl->waiting_lock);
+   spin_lock(&chnl->waiting_lock);
    list_add_tail(&data->hook, &chnl->waiting); 
-   up(&chnl->waiting_lock);
    
    atomic_inc(&chnl->num_waiting);
+   spin_unlock(&chnl->waiting_lock);
+   
    wake_up(&chnl->waiting_queue);
    
    return 0;
@@ -77,7 +78,7 @@ int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid)
    int rc = 0;
    struct list_head* iter;
    
-   down(&chnl->waiting_lock);
+   spin_lock(&chnl->waiting_lock);
    
    list_for_each(iter, &chnl->waiting)
    {
@@ -91,7 +92,7 @@ int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid)
       }
    }
 
-   up(&chnl->waiting_lock);
+   spin_unlock(&chnl->waiting_lock);
    
    return rc;
 }

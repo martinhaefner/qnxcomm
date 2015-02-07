@@ -21,8 +21,6 @@
 #include <asm-generic/siginfo.h>
 
 
-// TODO how to handle this? - driver internal data vs. userspace library,
-// but same contents
 #define _NTO_SIDE_CHANNEL ((~0u ^ (~0u >> 1)) >> 1)
 
 
@@ -59,7 +57,7 @@ struct _pulse
 
 struct qnx_io_channelcreate
 {
-	unsigned int flags;
+   unsigned int flags;
 };
 
 

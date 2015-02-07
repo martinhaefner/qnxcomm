@@ -41,6 +41,7 @@ int handle_msgsend_internal(struct qnx_channel* chnl, struct qnx_internal_msgsen
    {
       if (unlikely(msleep_interruptible(send_data->data.msg.timeout_ms) == 0))
       {
+         printk("Timeout\n");
          rc = -ETIMEDOUT;
          goto interrupted;
       }      
@@ -51,6 +52,7 @@ int handle_msgsend_internal(struct qnx_channel* chnl, struct qnx_internal_msgsen
    // break if we got a signal
    if (unlikely(signal_pending(current)))
    {
+      printk("signal\n");
       rc = -ERESTARTSYS;
    }
    else
@@ -61,6 +63,7 @@ int handle_msgsend_internal(struct qnx_channel* chnl, struct qnx_internal_msgsen
    
 interrupted:
 
+printk("interrupted\n");
    if (!qnx_channel_remove_message(chnl, send_data->rcvid))
    { 
       struct qnx_process_entry* entry;
@@ -163,7 +166,7 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
    struct qnx_io_receive recv_data = { 0 };
    struct qnx_channel* chnl;
    struct qnx_internal_msgsend* send_data;
-   void* ptr;
+   struct list_head* ptr;
    size_t bytes_to_copy;      
       
    if (unlikely(copy_from_user(&recv_data, (void*)data, sizeof(struct qnx_io_receive))))
@@ -171,45 +174,64 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
       rc = -EFAULT;
       goto out;
    }        
-                   
+   
    chnl = qnx_process_entry_find_channel(entry, recv_data.chid);
    if (unlikely(!chnl))
    {
       rc = -EBADF;
       goto out;
    }
-        
-   rc = wait_event_interruptible_timeout(chnl->waiting_queue, 
-        atomic_add_unless(&chnl->num_waiting, -1, 0) > 0, 
-        msecs_to_jiffies(recv_data.timeout_ms));
    
-   pr_debug("handle msgreceive rc=%d, num_waiting=%d\n", rc, atomic_read(&chnl->num_waiting));
+   //printk("num waiting: %d\n", atomic_read(&chnl->num_waiting));
+   
+   rc = wait_event_interruptible_timeout(chnl->waiting_queue, 
+        atomic_read(&chnl->num_waiting) > 0, 
+        msecs_to_jiffies(recv_data.timeout_ms));
    
    if (unlikely(rc < 0))
    {
+      printk("rc<0\n");
       rc = -ERESTARTSYS;
       goto out_channel_release;
    }
    
-   down(&chnl->waiting_lock);
-   ptr = chnl->waiting.next;
+   spin_lock(&chnl->waiting_lock);
+   
+   //printk("now num waiting: %d\n", atomic_read(&chnl->num_waiting));
    
    // empty?! FIXME maybe spurious wakeup here?!
-   if (ptr == &chnl->waiting)
+   if (list_empty(&chnl->waiting))
    {
-      pr_debug("Empty...\n");
-      up(&chnl->waiting_lock);      
+      printk("Empty...\n");
+      spin_unlock(&chnl->waiting_lock);      
       
       rc = -ETIMEDOUT;
       goto out_channel_release;
    }
    
+   ptr = chnl->waiting.next;
+   atomic_dec(&chnl->num_waiting);
+   
+   //printk("III\n");
    send_data = list_entry(ptr, struct qnx_internal_msgsend, hook);   
-   list_del_init(ptr);
+   
+   //printk("III+ data=%p tid=%p, rcvid=%d\n", send_data, send_data->task, send_data->rcvid);
+   list_del(ptr);
+   
+   /*{
+      struct qnx_internal_msgsend* iter;
+   
+      list_for_each_entry(iter, &chnl->waiting, hook)
+      {
+         printk("item after rcvid=%d, task=%p\n", iter->rcvid, iter->task);
+      }
+   }*/
    
    send_data->state = QNX_STATE_RECEIVING;
-   up(&chnl->waiting_lock);
+   //printk("III++\n");
    
+   spin_unlock(&chnl->waiting_lock);
+   //printk("IV\n");
    // assign meta information
    memset(&recv_data.info, 0, sizeof(struct _msg_info));   
    
@@ -278,7 +300,11 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
    {
       if (likely(rc > 0))
       {
+         //printk("V\n");
+   
          qnx_process_entry_add_pending(entry, send_data);
+         //printk("VI\n");
+   
       }
       else 
       {
@@ -289,6 +315,7 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
          send_data->state = QNX_STATE_FINISHED;            
 
          // wake up the waiting process
+         printk("wakeup error %p\n", send_data->task);
          wake_up_process(send_data->task);            
       }
    }
@@ -299,8 +326,10 @@ out_channel_release:
 
    qnx_channel_release(chnl);
 
-out:
+//printk("VII\n");
    
+out:
+
    return rc;
 }
 
@@ -343,6 +372,7 @@ int handle_msgreply(struct qnx_process_entry* entry, struct qnx_io_reply* data)
       send_data->state = QNX_STATE_FINISHED;            
 
       // wake up the waiting process
+//      printk("wakeup ok tid=%p, data=%p, rcvid=%d\n", send_data->task, send_data, send_data->rcvid);
       wake_up_process(send_data->task);            
    }
    else
@@ -439,6 +469,8 @@ int handle_msgsend(struct qnx_process_entry* entry, long data)
       goto out_destroy;
    }   
 
+//   printk("handle_msgsend %p, tid=%p coid=%d rcvid=%d\n", &snddata, current, snddata.data.msg.coid, snddata.rcvid);
+
    pr_debug("MsgSend coid=%d\n", snddata.data.msg.coid);
 
    chnl = qnx_driver_data_find_channel(entry->driver, conn.pid, conn.chid);
@@ -453,7 +485,7 @@ int handle_msgsend(struct qnx_process_entry* entry, long data)
    rc = handle_msgsend_internal(chnl, &snddata);                  
    // do not access chnl any more from here
 
-   pr_debug("MsgSend finished rc=%d\n", rc);
+//   printk("MsgSend finished %p, tid=%p, coid=%d, rc=%d\n", &snddata, current, snddata.data.msg.coid, rc);
 
    // copy data back to userspace - if buffer is provided
    if (rc >= 0 && snddata.reply.iov_len > 0)
@@ -470,6 +502,7 @@ out_destroy:
    
 out:
 
+//   printk("msgsend return %p coid=%d, rcvid=%d\n", &snddata, snddata.data.msg.coid, snddata.rcvid);
    return rc;
 }
 

@@ -64,7 +64,7 @@ struct qnx_channel
    int chid;
    
    struct list_head waiting;
-   struct semaphore waiting_lock;
+   spinlock_t waiting_lock;
    
    wait_queue_head_t waiting_queue;
    atomic_t num_waiting;     ///< wait queue helper flag

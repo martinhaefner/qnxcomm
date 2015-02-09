@@ -618,7 +618,7 @@ int qnxcomm_open(struct inode* n, struct file* f)
    entry = (struct qnx_process_entry*)kmalloc(sizeof(struct qnx_process_entry), GFP_USER);
    if (unlikely(!entry))
       return -ENOMEM;
-      
+         
    qnx_process_entry_init(entry, &driver_data);
 
    f->private_data = entry;
@@ -636,7 +636,7 @@ int qnxcomm_close(struct inode* n, struct file* f)
    pr_info("Got close for pid=%d\n", current_get_pid_nr(current));   
    
    if (f->private_data)
-   {
+   {      
       struct qnx_process_entry* entry = QNX_PROC_ENTRY(f);
       qnx_driver_data_remove(&driver_data, entry->pid);
       qnx_process_entry_release(entry);
@@ -650,7 +650,7 @@ int qnxcomm_close(struct inode* n, struct file* f)
 
 static 
 long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
-{   
+{      
    int rc = 0;
    
    if (unlikely(!data))
@@ -658,6 +658,11 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
  
    if (unlikely(!f->private_data))
       return -ENOTTY;   
+   
+   // this happens to be the case after a fork. The userspace library
+   // cares about this return value...
+   if (unlikely(current_get_pid_nr(current) != QNX_PROC_ENTRY(f)->pid))
+      return -ENOSPC;
    
    switch(cmd)
    {

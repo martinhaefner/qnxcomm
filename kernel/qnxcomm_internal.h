@@ -18,11 +18,7 @@
 #include "compatibility.h"
 
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,0,0)
-#   define current_get_pid_nr(cur) cur->tgid
-#else
-#   define current_get_pid_nr(cur) task_pid_nr(cur)
-#endif
+#define current_get_pid_nr(cur) cur->tgid
 
 
 #define QNX_STATE_INITIAL     0

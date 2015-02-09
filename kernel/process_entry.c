@@ -4,7 +4,7 @@
 void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_data* driver)
 {
    kref_init(&entry->refcnt);
-   entry->pid = task_pid_nr(current);
+   entry->pid = current_get_pid_nr(current);
    
    INIT_LIST_HEAD(&entry->channels);
    INIT_LIST_HEAD(&entry->connections);

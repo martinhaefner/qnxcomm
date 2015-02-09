@@ -10,6 +10,7 @@
 #include <time.h>
 #include <stdint.h>
 #include <limits>
+#include <mutex>
 
 #include "qnxcomm.h"
 #include "../kernel/qnxcomm_driver.h"
@@ -23,6 +24,32 @@ int initialize()
 }
 
 static int fd = initialize();
+std::mutex mtx;
+
+
+template<typename DataT>
+int safe_ioctl(int the_fd, int cmd, DataT data)
+{
+   int rc;
+   
+   for(int i=0; i<2; ++i)
+   {
+      rc = ::ioctl(the_fd, cmd, data);
+   
+      if (rc < 0 && errno == ENOSPC)
+      {
+         // try reconnect                  
+         std::lock_guard<std::mutex> guard(mtx);
+                  
+         while(close(fd) && errno == EINTR);
+         fd = initialize();
+      }
+      else
+         break;
+   }
+   
+   return rc;
+}
 
 
 struct timeout_val
@@ -110,9 +137,9 @@ int ChannelCreate(unsigned flags)
    int rc = -1;
    
    if (fd >= 0)
-   { 	  
-	  struct qnx_io_channelcreate data = { flags };
-      rc = ioctl(fd, QNX_IO_CHANNELCREATE, &data);
+   {    
+     struct qnx_io_channelcreate data = { flags };
+      rc = safe_ioctl(fd, QNX_IO_CHANNELCREATE, &data);
    }
    else
       errno = ESRCH;
@@ -128,7 +155,7 @@ int ChannelDestroy(int chid)
     
    if (fd >= 0)
    {
-      rc = ioctl(fd, QNX_IO_CHANNELDESTROY, chid);
+      rc = safe_ioctl(fd, QNX_IO_CHANNELDESTROY, chid);
    }
    else
       errno = ESRCH;
@@ -153,7 +180,8 @@ int ConnectAttach(uint32_t nd, pid_t pid, int chid, unsigned index, int flags)
             pid = ::getpid();
          
          struct qnx_io_attach data = { pid, chid, index, flags };
-         rc = ioctl(fd, QNX_IO_CONNECTATTACH, &data);
+                  
+         rc = safe_ioctl(fd, QNX_IO_CONNECTATTACH, &data);
       }
       else
          errno = EINVAL;
@@ -172,7 +200,7 @@ int ConnectDetach(int coid)
     
    if (fd >= 0)
    {
-      rc = ioctl(fd, QNX_IO_CONNECTDETACH, coid);
+      rc = safe_ioctl(fd, QNX_IO_CONNECTDETACH, coid);
    }
    else
       errno = ESRCH;
@@ -193,7 +221,7 @@ int MsgSend(int coid, const void* smsg, int sbytes, void* rmsg, int rbytes)
    {
       TimerStackSafe ttsf;
       struct qnx_io_msgsend io = { coid, ttsf.get_timeout_ms(), { const_cast<void*>(smsg), (size_t)sbytes }, { rmsg, (size_t)rbytes } };
-      rc = ioctl(fd, QNX_IO_MSGSEND, &io);
+      rc = safe_ioctl(fd, QNX_IO_MSGSEND, &io);
    }
    else
       errno = ESRCH;
@@ -210,7 +238,7 @@ int MsgSendPulse(int coid, int /*priority*/, int code, int value)
    if (fd >= 0)
    {
       struct qnx_io_msgsendpulse io = { coid, code, value };
-      rc = ioctl(fd, QNX_IO_MSGSENDPULSE, &io);
+      rc = safe_ioctl(fd, QNX_IO_MSGSENDPULSE, &io);
    }
    else
       errno = ESRCH;
@@ -231,7 +259,7 @@ int MsgReceive(int chid, void* msg, int bytes, struct _msg_info* info)
    {
       TimerStackSafe ttsf;
       struct qnx_io_receive io = { chid, ttsf.get_timeout_ms(), { msg, (size_t)bytes }, { 0 } };      
-      rc = ioctl(fd, QNX_IO_MSGRECEIVE, &io);
+      rc = safe_ioctl(fd, QNX_IO_MSGRECEIVE, &io);
       
       if (rc >= 0 && info)      
          memcpy(info, &io.info, sizeof(struct _msg_info));      
@@ -251,7 +279,7 @@ int MsgReply(int rcvid, int status, const void* msg, int size)
    if (fd >= 0)
    {
       struct qnx_io_reply io = { rcvid, status, { const_cast<void*>(msg), (size_t)size } };
-      rc = ioctl(fd, QNX_IO_MSGREPLY, &io);
+      rc = safe_ioctl(fd, QNX_IO_MSGREPLY, &io);
    }
    else
       errno = ESRCH;
@@ -268,7 +296,7 @@ int MsgError(int rcvid, int error)
    if (fd >= 0)
    {
       struct qnx_io_error_reply io = { rcvid, error };
-      rc = ioctl(fd, QNX_IO_MSGERROR, &io);
+      rc = safe_ioctl(fd, QNX_IO_MSGERROR, &io);
    }
    else
       errno = ESRCH;
@@ -285,7 +313,7 @@ int MsgRead(int rcvid, void* msg, int bytes, int offset)
    if (fd >= 0)
    {
       struct qnx_io_read io = { rcvid, offset, { msg, (size_t)bytes } };      
-      rc = ioctl(fd, QNX_IO_MSGREAD, &io);      
+      rc = safe_ioctl(fd, QNX_IO_MSGREAD, &io);      
    }
    else
       errno = ESRCH;
@@ -306,7 +334,7 @@ int MsgSendv(int coid, const struct iovec* siov, int sparts, const struct iovec*
    {
       TimerStackSafe ttsf;
       struct qnx_io_msgsendv io = { coid, ttsf.get_timeout_ms(), const_cast<struct iovec*>(siov), sparts, const_cast<struct iovec*>(riov), rparts };
-      rc = ioctl(fd, QNX_IO_MSGSENDV, &io);
+      rc = safe_ioctl(fd, QNX_IO_MSGSENDV, &io);
    }
    else
       errno = ESRCH;

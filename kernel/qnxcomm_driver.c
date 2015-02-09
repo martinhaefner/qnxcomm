@@ -1,7 +1,6 @@
 #include <asm/uaccess.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
-#include <asm/barrier.h>
 
 #include "qnxcomm_internal.h"
 
@@ -780,8 +779,10 @@ int __init qnxcomm_init(void)
    if (cdev_add(instance, dev_number, 1))
       goto free_cdev;
     
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)    
     if (!qnx_proc_init(&driver_data))
       goto del_inst;
+#endif      
       
    the_class = class_create(THIS_MODULE, "QnxComm");
    dev = device_create(the_class, 0, dev_number, 0, "%s", "qnxcomm");
@@ -808,7 +809,9 @@ void __exit qnxcomm_cleanup(void)
 {
    dev_info(dev, "QnxComm deinit\n");
    
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)       
    qnx_proc_destroy(&driver_data);    
+#endif   
    
    device_destroy(the_class, dev_number);
    class_destroy(the_class);

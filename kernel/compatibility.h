@@ -2,7 +2,11 @@
 #define QNXCOMM_COMPATIBILITY_H
 
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,0,0)
+#include <asm/uaccess.h>
+
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,2,0)
+
 static
 int memcpy_toiovec(struct iovec *iov, unsigned char *kdata, int len)
 {
@@ -46,8 +50,7 @@ int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len)
    return 0;
 }
 
-
-#endif
+#endif   // LINUX_VERSION_CODE <= KERNEL_VERSION(3,2,0)
 
 
 #endif   // QNXCOMM_COMPATIBILITY_H

@@ -17,32 +17,28 @@ qnx_show_connections(struct seq_file *buf, void *v)
    struct qnx_connection* conn;
    int have_output = 0;
    
-   down_read(&data->process_entries_lock);
+   rcu_read_lock();
    
    if (!list_empty(&data->process_entries))
    {
-      list_for_each_entry(entry, &data->process_entries, hook)
-      {
-         down_read(&entry->connections_lock);
-         
+      list_for_each_entry_rcu(entry, &data->process_entries, hook)
+      {         
          if (!list_empty(&entry->connections))
          {
             have_output = 1;
             seq_printf(buf, "pid=%d:\n", entry->pid);
          
-            list_for_each_entry(conn, &entry->connections, hook)
+            list_for_each_entry_rcu(conn, &entry->connections, hook)
             {
                seq_printf(buf, "   %d => pid=%d, chid=%d\n", conn->coid, conn->pid, conn->chid);
             }
             
             seq_printf(buf, "\n");
-         }
-                     
-         up_read(&entry->connections_lock);
+         }                     
       }
    }
    
-   up_read(&data->process_entries_lock);
+   rcu_read_unlock();
    
    if (!have_output)
       seq_printf(buf, "<no processes attached>\n");
@@ -59,32 +55,28 @@ qnx_show_channels(struct seq_file *buf, void *v)
    struct qnx_channel* chnl;
    int have_output = 0;
    
-   down_read(&data->process_entries_lock);
+   rcu_read_lock();
    
    if (!list_empty(&data->process_entries))
    {
-      list_for_each_entry(entry, &data->process_entries, hook)
+      list_for_each_entry_rcu(entry, &data->process_entries, hook)
       {
-         down_read(&entry->channels_lock);
-       
          if (!list_empty(&entry->channels))
          {
             have_output = 1;
             seq_printf(buf, "pid=%d: ", entry->pid);
          
-            list_for_each_entry(chnl, &entry->channels, hook)
+            list_for_each_entry_rcu(chnl, &entry->channels, hook)
             {
                seq_printf(buf, "%d ", chnl->chid);
             }
             
             seq_printf(buf, "\n");
-         }
-         
-         up_read(&entry->channels_lock);
+         }         
       }
    }
    
-   up_read(&data->process_entries_lock);
+   rcu_read_unlock();
    
    if (!have_output)
       seq_printf(buf, "<no processes attached>\n");

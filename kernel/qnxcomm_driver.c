@@ -413,7 +413,7 @@ int handle_msgread(struct qnx_process_entry* entry, struct qnx_io_read* data)
    int rc;
    struct qnx_internal_msgsend* send_data;
    
-   down(&entry->pending_lock);
+   spin_lock(&entry->pending_lock);
    
    list_for_each_entry(send_data, &entry->pending, hook) 
    {
@@ -444,7 +444,7 @@ int handle_msgread(struct qnx_process_entry* entry, struct qnx_io_read* data)
    
 out:
 
-   up(&entry->pending_lock);
+   spin_unlock(&entry->pending_lock);
          
    return rc;
 }

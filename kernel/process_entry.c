@@ -10,9 +10,9 @@ void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_d
    INIT_LIST_HEAD(&entry->connections);
    INIT_LIST_HEAD(&entry->pending);
    
-   init_rwsem(&entry->channels_lock);
-   init_rwsem(&entry->connections_lock);
-   sema_init(&entry->pending_lock, 1);   
+   spin_lock_init(&entry->channels_lock);
+   spin_lock_init(&entry->connections_lock);
+   spin_lock_init(&entry->pending_lock);   
    
    entry->driver = driver;
 }
@@ -28,7 +28,7 @@ void qnx_process_entry_free(struct kref* refcount)
 
    pr_debug("qnx_process_entry_free called\n");
  
-   down_write(&entry->channels_lock);
+   spin_lock(&entry->channels_lock);
    
    while(!list_empty(&entry->channels))
    {
@@ -36,16 +36,17 @@ void qnx_process_entry_free(struct kref* refcount)
       pr_debug("releasing channel...\n");
  
       chnl = list_first_entry(&entry->channels, struct qnx_channel, hook);
-      list_del(&chnl->hook);
+      list_del_rcu(&chnl->hook);
       
+      synchronize_rcu();      
       qnx_channel_release(chnl);
    }
    
-   up_write(&entry->channels_lock);
+   spin_unlock(&entry->channels_lock);
    
    pr_debug("channels done\n");
  
-   down(&entry->pending_lock);
+   spin_lock(&entry->pending_lock);
    
    list_for_each_safe(iter, next, &entry->pending)
    {  
@@ -55,11 +56,11 @@ void qnx_process_entry_free(struct kref* refcount)
       list_del(iter);      
    }
    
-   up(&entry->pending_lock);  
+   spin_unlock(&entry->pending_lock);  
    
    pr_debug("pendings done\n");
  
-   down_write(&entry->connections_lock);
+   spin_lock(&entry->connections_lock);
    
    while(!list_empty(&entry->connections))
    {
@@ -67,12 +68,13 @@ void qnx_process_entry_free(struct kref* refcount)
       pr_debug("connection...\n");
  
       conn = list_first_entry(&entry->connections, struct qnx_connection, hook);
-      list_del(&conn->hook);
+      list_del_rcu(&conn->hook);
       
+      synchronize_rcu();      
       kfree(conn);
    }
 
-   up_write(&entry->connections_lock); 
+   spin_unlock(&entry->connections_lock); 
    
    pr_debug("finished\n");
  
@@ -95,14 +97,16 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
    struct list_head* iter;
    struct qnx_channel* chnl = 0;
    
-   down_write(&entry->channels_lock);
+   spin_lock(&entry->channels_lock);
    
    list_for_each(iter, &entry->channels)
    {
       chnl = list_entry(iter, struct qnx_channel, hook);
       if (chnl->chid == chid)
       {
-         list_del(iter);         
+         list_del_rcu(iter);
+          
+         synchronize_rcu();        
          qnx_channel_release(chnl);
          
          rc = 0;
@@ -110,7 +114,7 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
       }    
    }
    
-   up_write(&entry->channels_lock);
+   spin_unlock(&entry->channels_lock);
    
    return rc;
 }
@@ -118,12 +122,12 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
 
 void qnx_process_entry_add_pending(struct qnx_process_entry* entry, struct qnx_internal_msgsend* data)
 {
-   down(&entry->pending_lock);
+   spin_lock(&entry->pending_lock);
       
    list_add(&data->hook, &entry->pending);
    data->state = QNX_STATE_PENDING;
    
-   up(&entry->pending_lock);
+   spin_unlock(&entry->pending_lock);
 }
 
 
@@ -131,7 +135,7 @@ struct qnx_internal_msgsend* qnx_process_entry_release_pending(struct qnx_proces
 {
    struct qnx_internal_msgsend* iter;
    
-   down(&entry->pending_lock);
+   spin_lock(&entry->pending_lock);
    
    list_for_each_entry(iter, &entry->pending, hook) 
    {
@@ -146,7 +150,7 @@ struct qnx_internal_msgsend* qnx_process_entry_release_pending(struct qnx_proces
    
 out:    
 
-   up(&entry->pending_lock);
+   spin_unlock(&entry->pending_lock);
    
    return iter;
 }
@@ -159,11 +163,11 @@ int qnx_process_entry_add_channel(struct qnx_process_entry* entry)
    
    rc = qnx_channel_init(chnl);
    
-   down_write(&entry->channels_lock);
+   spin_lock(&entry->channels_lock);
    
-   list_add(&chnl->hook, &entry->channels);
+   list_add_rcu(&chnl->hook, &entry->channels);
    
-   up_write(&entry->channels_lock);
+   spin_unlock(&entry->channels_lock);
    
    return rc;
 }
@@ -173,9 +177,9 @@ struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* ent
 {
    struct qnx_channel* chnl;
 
-   down_read(&entry->channels_lock);
+   rcu_read_lock();
    
-   list_for_each_entry(chnl, &entry->channels, hook) 
+   list_for_each_entry_rcu(chnl, &entry->channels, hook) 
    {
       if (chnl->chid == chid)   
       {            
@@ -187,7 +191,7 @@ struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* ent
    chnl = 0;
    
 out:   
-   up_read(&entry->channels_lock);
+   rcu_read_unlock();
     
    return chnl;
 }
@@ -197,9 +201,9 @@ int qnx_process_entry_is_channel_available(struct qnx_process_entry* entry, int 
 {
    struct qnx_channel* chnl;  
    
-   down_read(&entry->channels_lock);
+   rcu_read_lock();
    
-   list_for_each_entry(chnl, &entry->channels, hook)
+   list_for_each_entry_rcu(chnl, &entry->channels, hook)
    {
       if (chnl->chid == chid)
          goto out;
@@ -208,7 +212,7 @@ int qnx_process_entry_is_channel_available(struct qnx_process_entry* entry, int 
    chnl = 0;
    
 out:
-   up_read(&entry->channels_lock);
+   rcu_read_unlock();
    
    return chnl?1:0;
 }
@@ -227,11 +231,11 @@ int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct qnx
          
          rc = qnx_connection_init(conn, att_data->pid, att_data->chid, att_data->index);
             
-         down_write(&entry->connections_lock);
+         spin_lock(&entry->connections_lock);
          
-         list_add(&conn->hook, &entry->connections);
+         list_add_rcu(&conn->hook, &entry->connections);
          
-         up_write(&entry->connections_lock);
+         spin_unlock(&entry->connections_lock);
       }
       else
          rc = -ESRCH;
@@ -252,14 +256,16 @@ int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coi
    struct list_head* iter;
    struct qnx_connection* conn = 0;
    
-   down_write(&entry->connections_lock);
+   spin_lock(&entry->connections_lock);
    
    list_for_each(iter, &entry->connections)
    {
       conn = list_entry(iter, struct qnx_connection, hook);
       if (conn->coid == coid)
       {
-         list_del(iter);
+         list_del_rcu(iter);
+         
+         synchronize_rcu();
          kfree(conn);
          
          rc = 0;   
@@ -267,7 +273,7 @@ int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coi
       }    
    }
    
-   up_write(&entry->connections_lock);
+   spin_unlock(&entry->connections_lock);
    
    return rc;
 }
@@ -278,9 +284,9 @@ struct qnx_connection qnx_process_entry_find_connection(struct qnx_process_entry
    struct qnx_connection rc = { { 0 }, 0 };
    struct qnx_connection* conn;
    
-   down_read(&entry->connections_lock);
+   rcu_read_lock();
 
-   list_for_each_entry(conn, &entry->connections, hook)
+   list_for_each_entry_rcu(conn, &entry->connections, hook)
    {
       if (conn->coid == coid)
       { 
@@ -292,7 +298,7 @@ struct qnx_connection qnx_process_entry_find_connection(struct qnx_process_entry
       }
    }
    
-   up_read(&entry->connections_lock);
+   rcu_read_unlock();
     
    return rc;
 }

@@ -78,10 +78,21 @@ struct qnx_connection
 };
 
 
+// FIXME number of open files: sysctl_nr_open
+struct qnx_connection_table
+{
+   struct qnx_connection** conn;
+   size_t capacity;
+   
+   int lastfree;
+   struct list_head freelist;
+};
+
+
 struct qnx_driver_data
 {
    struct list_head process_entries;
-   struct rw_semaphore process_entries_lock;   
+   spinlock_t process_entries_lock;   
 };
 
 
@@ -96,9 +107,9 @@ struct qnx_process_entry
    struct list_head connections;
    struct list_head pending;
       
-   struct rw_semaphore channels_lock;  
-   struct rw_semaphore connections_lock;
-   struct semaphore pending_lock;
+   spinlock_t channels_lock;  
+   spinlock_t connections_lock;
+   spinlock_t pending_lock;
    
    struct qnx_driver_data* driver;
 };

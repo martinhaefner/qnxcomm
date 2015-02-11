@@ -13,7 +13,7 @@ extern "C" {
 
 
 #define _NTO_SIDE_CHANNEL ((~0u ^ (~0u >> 1)) >> 1)
-
+#define QNX_FLAG_NOREPLY    0x1
 
 struct _msg_info 
 {
@@ -27,7 +27,7 @@ struct _msg_info
    int32_t   srcmsglen;  ///< length of MsgSend input data
    int32_t   dstmsglen;  ///< length of MsgSend output data
    int16_t   priority;   ///< priority of message, i.e. thread priority or pulse priority (TODO currently unset)
-   int16_t   flags;      ///< unused
+   int16_t   flags;      ///< may have the flag QNX_FLAG_NOREPLY set
    uint32_t  reserved;   ///< unused
 };
 
@@ -87,9 +87,47 @@ int TimerTimeout(clockid_t id, int flags, const struct sigevent * notify, const 
 // -----------------------------------------------------------------------------
 
 
+/**
+ * Compatibility only. No behaviour change to ChannelCreate.
+ */
 int ChannelCreateEx(unsigned flags, const char* mode);
 
+/**
+ * Compatibility only. No behaviour change to ConnectAttachEx.
+ */
 int ConnectAttachEx(uint32_t nd, pid_t pid, int chid, unsigned index, int flags, const char* mode);
+
+
+// -----------------------------------------------------------------------------
+
+
+/**
+ * Send message but don't wait for reply.
+ * The maximum size for the message is 1k.
+ * The function may block if no more internal slots are available.
+ * You must not reply on such a message via MsgReply, nor can you
+ * read more data after calling MsgReceive. A NoReply message can be
+ * detected via the _msg_info structure flags (QNX_FLAG_NOREPLY is set).
+ */
+int MsgSendNoReply(int coid, const void* smsg, int sbytes);
+
+/**
+ * Send message but don't wait for reply.
+ * The maximum size for the message is 1k.
+ * The function may block if no more internal slots are available.
+ * You must not reply on such a message via MsgReply, nor can you
+ * read more data after calling MsgReceive. A NoReply message can be
+ * detected via the _msg_info structure flags (QNX_FLAG_NOREPLY is set).
+ */
+int MsgSendNoReplyv(int coid, const struct iovec* siov, int sparts);
+
+/**
+ * Return a file descriptor to be used for polling for new messages
+ * using select, poll or epoll. The fd may NOT be used to retrieve data,
+ * use MsgReceive instead. The fd must be closed separately from 
+ * ChannelDestroy. The file descriptor may not be used after a fork().
+ */
+int MsgReceivePollFd(int chid);
 
 
 #ifdef __cplusplus

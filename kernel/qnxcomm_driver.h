@@ -73,7 +73,8 @@ struct qnx_io_attach
 struct qnx_io_msgsend
 {
    int coid;
-   int timeout_ms;    // timeout in milliseconds
+   int timeout_ms;    ///< timeout in milliseconds
+   int no_reply;      ///< if 1, the client does not expect a reply.
       
    struct iovec in;
    struct iovec out;
@@ -83,7 +84,8 @@ struct qnx_io_msgsend
 struct qnx_io_msgsendv
 {
    int coid;
-   int timeout_ms;    // timeout in milliseconds
+   int timeout_ms;    ///< timeout in milliseconds
+   int no_reply;      ///< if 1, the client does not expect a reply.
    
    struct iovec* in;
    int in_len;
@@ -142,23 +144,22 @@ struct qnx_io_read
 #define QNXCOMM_MAGIC 'q'
 
 
-#define QNX_IO_CHANNELCREATE  _IOW(QNXCOMM_MAGIC,  1, struct qnx_io_channelcreate)
-#define QNX_IO_CHANNELDESTROY _IOW(QNXCOMM_MAGIC,  2, int)
+#define QNX_IO_CHANNELCREATE   _IOW(QNXCOMM_MAGIC,  1, struct qnx_io_channelcreate)
+#define QNX_IO_CHANNELDESTROY  _IOW(QNXCOMM_MAGIC,  2, int)
 
-#define QNX_IO_CONNECTATTACH  _IOW(QNXCOMM_MAGIC,  3, struct qnx_io_attach)
-#define QNX_IO_CONNECTDETACH  _IOW(QNXCOMM_MAGIC,  4, int)
+#define QNX_IO_CONNECTATTACH   _IOW(QNXCOMM_MAGIC,  3, struct qnx_io_attach)
+#define QNX_IO_CONNECTDETACH   _IOW(QNXCOMM_MAGIC,  4, int)
 
-#define QNX_IO_MSGSEND        _IOW(QNXCOMM_MAGIC,  5, struct qnx_io_msgsend)
-#define QNX_IO_MSGSENDPULSE   _IOW(QNXCOMM_MAGIC,  6, struct qnx_io_msgsendpulse)
+#define QNX_IO_MSGSEND         _IOW(QNXCOMM_MAGIC,  5, struct qnx_io_msgsend)
+#define QNX_IO_MSGSENDPULSE    _IOW(QNXCOMM_MAGIC,  6, struct qnx_io_msgsendpulse)
 
-#define QNX_IO_MSGRECEIVE    _IOWR(QNXCOMM_MAGIC,  7, struct qnx_io_receive)
-#define QNX_IO_MSGREPLY       _IOW(QNXCOMM_MAGIC,  8, struct qnx_io_reply)
-#define QNX_IO_MSGERROR       _IOW(QNXCOMM_MAGIC,  9, struct qnx_io_error_reply)
-#define QNX_IO_MSGREAD        _IOW(QNXCOMM_MAGIC, 10, struct qnx_io_read)
+#define QNX_IO_MSGRECEIVE     _IOWR(QNXCOMM_MAGIC,  7, struct qnx_io_receive)
+#define QNX_IO_MSGREPLY        _IOW(QNXCOMM_MAGIC,  8, struct qnx_io_reply)
+#define QNX_IO_MSGERROR        _IOW(QNXCOMM_MAGIC,  9, struct qnx_io_error_reply)
+#define QNX_IO_MSGREAD         _IOW(QNXCOMM_MAGIC, 10, struct qnx_io_read)
 
-#define QNX_IO_MSGSENDV       _IOW(QNXCOMM_MAGIC, 11, struct qnx_io_msgsendv)
-
-// FIXME add MsgReceivePulse and move them all to scatter gather versions
+#define QNX_IO_MSGSENDV        _IOW(QNXCOMM_MAGIC, 11, struct qnx_io_msgsendv)
+#define QNX_IO_REGISTER_POLLFD _IOW(QNXCOMM_MAGIC, 12, int)
 
 
 #endif   // __QNXCOMM_DRIVER_H

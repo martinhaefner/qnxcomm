@@ -220,7 +220,7 @@ int MsgSend(int coid, const void* smsg, int sbytes, void* rmsg, int rbytes)
    if (fd >= 0)
    {
       TimerStackSafe ttsf;
-      struct qnx_io_msgsend io = { coid, ttsf.get_timeout_ms(), { const_cast<void*>(smsg), (size_t)sbytes }, { rmsg, (size_t)rbytes } };
+      struct qnx_io_msgsend io = { coid, ttsf.get_timeout_ms(), 0, { const_cast<void*>(smsg), (size_t)sbytes }, { rmsg, (size_t)rbytes } };
       rc = safe_ioctl(fd, QNX_IO_MSGSEND, &io);
    }
    else
@@ -333,7 +333,7 @@ int MsgSendv(int coid, const struct iovec* siov, int sparts, const struct iovec*
    if (fd >= 0)
    {
       TimerStackSafe ttsf;
-      struct qnx_io_msgsendv io = { coid, ttsf.get_timeout_ms(), const_cast<struct iovec*>(siov), sparts, const_cast<struct iovec*>(riov), rparts };
+      struct qnx_io_msgsendv io = { coid, ttsf.get_timeout_ms(), 0, const_cast<struct iovec*>(siov), sparts, const_cast<struct iovec*>(riov), rparts };
       rc = safe_ioctl(fd, QNX_IO_MSGSENDV, &io);
    }
    else
@@ -400,4 +400,53 @@ int ChannelCreateEx(unsigned flags, const char* /*mode*/)
 }
 
 
+// -----------------------------------------------------------------------------
 
+
+extern "C"
+int MsgSendNoReply(int coid, const void* smsg, int sbytes)
+{
+   int rc = -1;
+   
+   if (fd >= 0)
+   {
+      TimerStackSafe ttsf;
+      struct qnx_io_msgsend io = { coid, ttsf.get_timeout_ms(), 1, { const_cast<void*>(smsg), (size_t)sbytes }, { 0, 0 } };
+      rc = safe_ioctl(fd, QNX_IO_MSGSEND, &io);
+   }
+   else
+      errno = ESRCH;
+      
+   return rc;
+}
+
+
+extern "C"
+int MsgSendNoReplyv(int coid, const struct iovec* siov, int sparts)
+{
+   int rc = -1;
+   
+   if (fd >= 0)
+   {
+      TimerStackSafe ttsf;
+      struct qnx_io_msgsendv io = { coid, ttsf.get_timeout_ms(), 1, const_cast<struct iovec*>(siov), sparts, 0, 0 };
+      rc = safe_ioctl(fd, QNX_IO_MSGSENDV, &io);
+   }
+   else
+      errno = ESRCH;
+      
+   return rc;
+}
+
+
+extern "C"
+int MsgReceivePollFd(int chid)
+{
+   int fd = ::open("/dev/qnxcomm", O_RDONLY|O_CLOEXEC);
+   
+   if (ioctl(fd, QNX_IO_REGISTER_POLLFD, chid) == 0)
+      return fd;
+      
+   while(::close(fd) && errno == EINTR);
+   return -1;
+}

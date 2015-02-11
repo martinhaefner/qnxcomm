@@ -612,20 +612,27 @@ int qnxcomm_open(struct inode* n, struct file* f)
 {
    struct qnx_process_entry* entry;
    
-   if (qnx_driver_data_is_process_available(&driver_data, current_get_pid_nr(current)))
-      return -ENOSPC;
-   
-   entry = (struct qnx_process_entry*)kmalloc(sizeof(struct qnx_process_entry), GFP_USER);
-   if (unlikely(!entry))
-      return -ENOMEM;
-         
-   qnx_process_entry_init(entry, &driver_data);
+   if (f->f_mode & O_RDWR)
+   {
+      if (qnx_driver_data_is_process_available(&driver_data, current_get_pid_nr(current)))
+         return -ENOSPC;
+      
+      entry = (struct qnx_process_entry*)kmalloc(sizeof(struct qnx_process_entry), GFP_USER);
+      if (unlikely(!entry))
+         return -ENOMEM;
+            
+      qnx_process_entry_init(entry, &driver_data);
 
-   f->private_data = entry;
-   qnx_driver_data_add_process(&driver_data, entry);
+      f->private_data = entry;
+      qnx_driver_data_add_process(&driver_data, entry);
 
-   pr_info("Open called from pid=%d\n", current_get_pid_nr(current));
-   
+      pr_info("Open called from pid=%d\n", current_get_pid_nr(current));
+   }
+   else
+   {
+      pr_info("Open called for poll fd from pid=%d\n", current_get_pid_nr(current));
+   }
+      
    return 0;
 }
 
@@ -633,17 +640,31 @@ int qnxcomm_open(struct inode* n, struct file* f)
 static
 int qnxcomm_close(struct inode* n, struct file* f)
 {
-   pr_info("Got close for pid=%d\n", current_get_pid_nr(current));   
-   
-   if (f->private_data)
-   {      
-      struct qnx_process_entry* entry = QNX_PROC_ENTRY(f);
-      qnx_driver_data_remove(&driver_data, entry->pid);
-      qnx_process_entry_release(entry);
+   if (f->f_mode & O_RDWR)
+   {
+      pr_info("Got close for pid=%d\n", current_get_pid_nr(current));   
       
-      f->private_data = 0;
+      if (f->private_data)
+      {      
+         struct qnx_process_entry* entry = QNX_PROC_ENTRY(f);
+         qnx_driver_data_remove(&driver_data, entry->pid);
+         qnx_process_entry_release(entry);
+         
+         f->private_data = 0;
+      }
+   }
+   else
+   {
+      pr_info("Got close for pollfd from pid=%d\n", current_get_pid_nr(current));   
    }
    
+   return 0;
+}
+
+
+static
+unsigned int qnxcomm_poll(struct file* f, struct poll_table_struct* ptable)
+{
    return 0;
 }
 
@@ -764,6 +785,7 @@ struct file_operations fops = {
    .open = &qnxcomm_open,
    .unlocked_ioctl = &qnxcomm_ioctl,
    .compat_ioctl = &qnxcomm_ioctl,
+   .poll = &qnxcomm_poll,
    .release = &qnxcomm_close
 };
 

@@ -9,10 +9,12 @@ void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_d
    INIT_LIST_HEAD(&entry->channels);
    INIT_LIST_HEAD(&entry->connections);
    INIT_LIST_HEAD(&entry->pending);
+   INIT_LIST_HEAD(&entry->pollfds);
    
    spin_lock_init(&entry->channels_lock);
    spin_lock_init(&entry->connections_lock);
    spin_lock_init(&entry->pending_lock);   
+   spin_lock_init(&entry->pollfds_lock);
    
    entry->driver = driver;
 }
@@ -120,6 +122,60 @@ int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid)
 }
 
 
+int qnx_process_entry_add_pollfd(struct qnx_process_entry* entry, struct file* f, int chid)
+{   
+   struct qnx_pollfd* pollfd;
+   
+   if (!qnx_process_entry_is_channel_available(entry, chid))
+      return -ESRCH;
+ 
+   pollfd = (struct qnx_pollfd*)kmalloc(sizeof(struct qnx_pollfd), GFP_USER);
+   if (!pollfd)
+      return -ENOMEM;
+   
+   pollfd->file = f;
+   pollfd->chid = chid;
+
+   spin_lock(&entry->pollfds_lock);
+
+   list_add_rcu(&pollfd->hook, &entry->pollfds);
+
+   spin_unlock(&entry->pollfds_lock);
+   
+   return 0;
+}
+
+
+int qnx_process_entry_remove_pollfd(struct qnx_process_entry* entry, struct file* f)
+{
+   int rc = -EINVAL;   
+   
+   struct list_head* iter;
+   struct qnx_pollfd* pollfd = 0;
+   
+   spin_lock(&entry->pollfds_lock);
+   
+   list_for_each(iter, &entry->pollfds)
+   {
+      pollfd = list_entry(iter, struct qnx_pollfd, hook);
+      if (pollfd->file == f)
+      {
+         list_del_rcu(iter);
+         
+         synchronize_rcu();
+         kfree(pollfd);
+         
+         rc = 0;   
+         break;
+      }    
+   }
+   
+   spin_unlock(&entry->pollfds_lock);
+   
+   return rc;
+}
+
+
 void qnx_process_entry_add_pending(struct qnx_process_entry* entry, struct qnx_internal_msgsend* data)
 {
    spin_lock(&entry->pending_lock);
@@ -193,6 +249,32 @@ struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* ent
 out:   
    rcu_read_unlock();
     
+   return chnl;
+}
+
+
+extern struct qnx_channel* qnx_process_entry_find_channel_from_file(struct qnx_process_entry* entry, struct file* f)
+{
+   struct qnx_pollfd* pollfd;
+   struct qnx_channel* chnl = 0;
+
+   rcu_read_lock();
+   
+   list_for_each_entry_rcu(pollfd, &entry->pollfds, hook) 
+   {
+      if (pollfd->file == f)   
+         goto out;      
+   }
+   
+   pollfd = 0;
+   
+out:   
+   
+   if (pollfd)
+      chnl = qnx_process_entry_find_channel(entry, pollfd->chid);
+   
+   rcu_read_unlock(); 
+   
    return chnl;
 }
 

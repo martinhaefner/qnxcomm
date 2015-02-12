@@ -1,6 +1,7 @@
 #include <asm/uaccess.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
+#include <linux/poll.h>
 
 #include "qnxcomm_internal.h"
 
@@ -614,6 +615,8 @@ int qnxcomm_open(struct inode* n, struct file* f)
    
    if (f->f_mode & O_RDWR)
    {
+      pr_info("Open called from pid=%d\n", current_get_pid_nr(current));
+      
       if (qnx_driver_data_is_process_available(&driver_data, current_get_pid_nr(current)))
          return -ENOSPC;
       
@@ -624,13 +627,16 @@ int qnxcomm_open(struct inode* n, struct file* f)
       qnx_process_entry_init(entry, &driver_data);
 
       f->private_data = entry;
-      qnx_driver_data_add_process(&driver_data, entry);
-
-      pr_info("Open called from pid=%d\n", current_get_pid_nr(current));
+      qnx_driver_data_add_process(&driver_data, entry);      
    }
    else
    {
       pr_info("Open called for poll fd from pid=%d\n", current_get_pid_nr(current));
+      
+      entry = qnx_driver_data_find_process(&driver_data, current_get_pid_nr(current));      
+      
+      if (entry)      
+         f->private_data = entry;
    }
       
    return 0;
@@ -640,6 +646,8 @@ int qnxcomm_open(struct inode* n, struct file* f)
 static
 int qnxcomm_close(struct inode* n, struct file* f)
 {
+   int rc = 0;
+   
    if (f->f_mode & O_RDWR)
    {
       pr_info("Got close for pid=%d\n", current_get_pid_nr(current));   
@@ -656,16 +664,37 @@ int qnxcomm_close(struct inode* n, struct file* f)
    else
    {
       pr_info("Got close for pollfd from pid=%d\n", current_get_pid_nr(current));   
+      
+      if (f->private_data)      
+      {
+         rc = qnx_process_entry_remove_pollfd(QNX_PROC_ENTRY(f), f);
+         qnx_process_entry_release(QNX_PROC_ENTRY(f));      
+      }
    }
    
-   return 0;
+   return rc;
 }
 
 
 static
 unsigned int qnxcomm_poll(struct file* f, struct poll_table_struct* ptable)
 {
-   return 0;
+   unsigned int mask = 0;
+   
+   struct qnx_process_entry* entry = QNX_PROC_ENTRY(f);
+   struct qnx_channel* chnl = qnx_process_entry_find_channel_from_file(entry, f);
+   
+   if (chnl)
+   {
+      poll_wait(f, &chnl->waiting_queue,  ptable);
+      
+      if (atomic_read(&chnl->num_waiting) > 0)
+         mask |= POLLIN | POLLRDNORM;
+   }
+   else
+      mask |= POLLHUP;
+   
+   return mask;
 }
 
 
@@ -770,6 +799,10 @@ long qnxcomm_ioctl(struct file* f, unsigned int cmd, unsigned long data)
    case QNX_IO_MSGSENDV:            
       rc = handle_msgsendv(QNX_PROC_ENTRY(f), data);      
       break;      
+     
+   case QNX_IO_REGISTER_POLLFD:
+      rc = qnx_process_entry_add_pollfd(QNX_PROC_ENTRY(f), f, data);
+      break;
       
    default:
       rc = -EINVAL;

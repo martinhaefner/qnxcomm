@@ -18,6 +18,7 @@ add_executable(unittests
    timeout.cpp
    servercrash.cpp
    multithreaded.cpp
+   poll.cpp
 )
 
 add_executable(testapp testapp.cpp )

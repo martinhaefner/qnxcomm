@@ -96,6 +96,15 @@ struct qnx_driver_data
 };
 
 
+struct qnx_pollfd
+{
+   struct list_head hook;
+   
+   struct file* file;
+   int chid;   
+};
+
+
 struct qnx_process_entry
 {
    struct list_head hook;
@@ -106,10 +115,12 @@ struct qnx_process_entry
    struct list_head channels;
    struct list_head connections;
    struct list_head pending;
+   struct list_head pollfds;
       
    spinlock_t channels_lock;  
    spinlock_t connections_lock;
    spinlock_t pending_lock;
+   spinlock_t pollfds_lock;
    
    struct qnx_driver_data* driver;
 };
@@ -151,6 +162,10 @@ extern int qnx_process_entry_add_channel(struct qnx_process_entry* entry);
 extern int qnx_process_entry_remove_channel(struct qnx_process_entry* entry, int chid);
 extern struct qnx_channel* qnx_process_entry_find_channel(struct qnx_process_entry* entry, int chid);
 extern int qnx_process_entry_is_channel_available(struct qnx_process_entry* entry, int chid);
+
+extern int qnx_process_entry_add_pollfd(struct qnx_process_entry* entry, struct file* f, int chid);
+extern int qnx_process_entry_remove_pollfd(struct qnx_process_entry* entry, struct file* f);
+extern struct qnx_channel* qnx_process_entry_find_channel_from_file(struct qnx_process_entry* entry, struct file* f);
 
 extern int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct qnx_io_attach* att_data);
 extern int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coid);

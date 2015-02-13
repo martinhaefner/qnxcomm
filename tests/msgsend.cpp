@@ -102,7 +102,7 @@ void zero_receiverthread(int chid)
 }
 
 
-TEST(qnxcomm, msgsend) 
+TEST(MsgSend, basics) 
 {
    int chid = ChannelCreate(0);
    EXPECT_GT(chid, 0);
@@ -142,7 +142,7 @@ TEST(qnxcomm, msgsend)
 }
 
 
-TEST(qnxcomm, msgsend_zero_buffers) 
+TEST(MsgSend, zero_buffers) 
 {
    int chid = ChannelCreate(0);
    EXPECT_GT(chid, 0);

@@ -18,7 +18,12 @@
 #include "compatibility.h"
 
 
-#define current_get_pid_nr(cur) cur->tgid
+// XXX this is a hack: my ARM kernel config does not match the installed kernel -> fixit
+#ifdef CONFIG_ARM
+#   define current_get_pid_nr(cur) (*(((pid_t*)&cur->tgid)-1))
+#else
+#   define current_get_pid_nr(cur) (cur->tgid)
+#endif
 
 
 #define QNX_STATE_INITIAL     0
@@ -147,7 +152,7 @@ extern struct qnx_channel* qnx_driver_data_find_channel(struct qnx_driver_data* 
 extern int qnx_driver_data_is_process_available(struct qnx_driver_data* data, pid_t pid);
 
 
-extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_msgsend* io, pid_t pid);
+extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend** data, struct qnx_io_msgsend* io, pid_t pid);
 extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_msgsendv* _iov, pid_t pid);
 extern int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid);
 

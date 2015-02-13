@@ -70,33 +70,64 @@ out:
 }
 
 
-int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_msgsend* io, pid_t pid)
-{        
+int qnx_internal_msgsend_init(struct qnx_internal_msgsend** out_data, struct qnx_io_msgsend* io, pid_t pid)
+{
+   struct qnx_internal_msgsend* data = *out_data;
+ 
+   void* allocated = 0;
    void* buf = 0;
-   
-   if (unlikely(copy_from_user(&data->data.msg, io, sizeof(struct qnx_io_msgsend))))
-      return -EFAULT;
-      
-   buf = kmalloc(data->data.msg.in.iov_len, GFP_USER);
-   if (unlikely(!buf))
-      return -ENOMEM;
-   
-   if (unlikely(copy_from_user(buf, data->data.msg.in.iov_base, data->data.msg.in.iov_len)))
+     
+   if (likely(data))
    {
-      kfree(buf);
+      if (unlikely(copy_from_user(&data->data.msg, io, sizeof(struct qnx_io_msgsend))))
+         return -EFAULT;
+      
+      allocated = kmalloc(data->data.msg.in.iov_len, GFP_USER);
+      
+      if (unlikely(!allocated))
+         return -ENOMEM;
+         
+      buf = allocated;
+      data->task = current;   
+   }
+   else
+   {
+      struct qnx_io_msgsend tmp;
+      
+      if (unlikely(copy_from_user(&tmp, io, sizeof(struct qnx_io_msgsend))))
+         return -EFAULT;
+         
+      data = (struct qnx_internal_msgsend*)kmalloc(sizeof(struct qnx_internal_msgsend) + tmp.in.iov_len, GFP_USER);
+      
+      if (unlikely(!data))
+         return -ENOMEM;
+
+      memcpy(&data->data, &tmp, sizeof(tmp));
+      
+      buf = data + 1;
+      data->task = 0;    // no reply
+      
+      allocated = data;
+      *out_data = data;
+   }
+   
+   if (likely(!copy_from_user(buf, data->data.msg.in.iov_base, data->data.msg.in.iov_len)))
+   {
+      data->data.msg.in.iov_base = buf;
+   }
+   else
+   {
+      kfree(allocated);
       return -EFAULT;
    }
-      
+   
    data->rcvid = get_new_rcvid();   
    data->status = 0;   
    data->sender_pid = pid;
    data->receiver_pid = 0;
-   
-   data->data.msg.in.iov_base = buf;           
-   memset(&data->reply, 0, sizeof(data->reply));
-   
-   data->task = current;   
    data->state = QNX_STATE_INITIAL;
+
+   memset(&data->reply, 0, sizeof(data->reply));
    
    return 0;
 }
@@ -111,7 +142,7 @@ int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qn
    data->status = 0;
    data->sender_pid = pid;
    data->receiver_pid = 0;
-   data->task = 0;
+   data->task = 0;     // pulses don't have replies
    data->state = QNX_STATE_INITIAL;
 
    memset(&data->reply, 0, sizeof(data->reply));
@@ -122,8 +153,11 @@ int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qn
 
 void qnx_internal_msgsend_destroy(struct qnx_internal_msgsend* data)
 {      
-   kfree(data->data.msg.in.iov_base);
-   kfree(data->reply.iov_base);
+   if (data->task != 0)
+   {
+      kfree(data->data.msg.in.iov_base);
+      kfree(data->reply.iov_base);
+   }
 }
 
 

@@ -23,6 +23,8 @@
 
 #define _NTO_SIDE_CHANNEL ((~0u ^ (~0u >> 1)) >> 1)
 
+#define QNX_FLAG_NOREPLY    0x1
+
 
 struct _msg_info 
 {
@@ -36,7 +38,7 @@ struct _msg_info
    int32_t   srcmsglen;  ///< length of MsgSend input data
    int32_t   dstmsglen;  ///< length of MsgSend output data
    int16_t   priority;   ///< priority of message, i.e. thread priority or pulse priority
-   int16_t   flags;      ///< unused
+   int16_t   flags;      ///< reserved
    uint32_t  reserved;   ///< unused
 };
 
@@ -74,7 +76,6 @@ struct qnx_io_msgsend
 {
    int coid;
    int timeout_ms;    ///< timeout in milliseconds
-   int no_reply;      ///< if 1, the client does not expect a reply.
       
    struct iovec in;
    struct iovec out;
@@ -85,7 +86,6 @@ struct qnx_io_msgsendv
 {
    int coid;
    int timeout_ms;    ///< timeout in milliseconds
-   int no_reply;      ///< if 1, the client does not expect a reply.
    
    struct iovec* in;
    int in_len;
@@ -160,6 +160,9 @@ struct qnx_io_read
 
 #define QNX_IO_MSGSENDV        _IOW(QNXCOMM_MAGIC, 11, struct qnx_io_msgsendv)
 #define QNX_IO_REGISTER_POLLFD _IOW(QNXCOMM_MAGIC, 12, int)
+
+#define QNX_IO_MSGSENDNOREPLY  _IOW(QNXCOMM_MAGIC, 13, struct qnx_io_msgsend)
+#define QNX_IO_MSGSENDNOREPLYV _IOW(QNXCOMM_MAGIC, 14, struct qnx_io_msgsendv)
 
 
 #endif   // __QNXCOMM_DRIVER_H

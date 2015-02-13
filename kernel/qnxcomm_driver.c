@@ -541,8 +541,9 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data, int with_reply)
    struct qnx_io_msgsendv send_data = { 0 };
    struct qnx_connection conn;
    struct qnx_channel* chnl;
-   struct qnx_internal_msgsend snddata;
-
+   struct qnx_internal_msgsend snddata_stack_buf;
+   struct qnx_internal_msgsend* snddata = &snddata_stack_buf;
+   
    struct iovec buf_in[QNX_MAX_IOVEC_LEN];
    struct iovec buf_out[QNX_MAX_IOVEC_LEN];
 
@@ -597,26 +598,32 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data, int with_reply)
       rc = -EBADF;
       goto out_clean_out;
    }    
+   
+   if (unlikely(!with_reply))
+      snddata = 0;
 
    if (unlikely((rc = qnx_internal_msgsend_initv(&snddata, &send_data, entry->pid))))
       goto out_clean_out;  
 
-   snddata.receiver_pid = conn.pid;         
+   snddata->receiver_pid = conn.pid;         
 
-   rc = handle_msgsend_internal(chnl, &snddata);                                    
+   rc = handle_msgsend_internal(chnl, snddata);                                    
    // do not access chnl any more from here
 
-   // copy data back to userspace - if buffer is provided
-   if (rc >= 0 && snddata.reply.iov_len > 0)
+   if (likely(with_reply))
    {
-      size_t bytes_to_copy = min(snddata.data.msg.out.iov_len, snddata.reply.iov_len);   
+      // copy data back to userspace - if buffer is provided
+      if (rc >= 0 && snddata->reply.iov_len > 0)
+      {
+         size_t bytes_to_copy = min(snddata->data.msg.out.iov_len, snddata->reply.iov_len);   
 
-      if (memcpy_toiovec(out, snddata.reply.iov_base, bytes_to_copy))
-         rc = -EFAULT;
+         if (memcpy_toiovec(out, snddata->reply.iov_base, bytes_to_copy))
+            rc = -EFAULT;
+      }
+
+      qnx_internal_msgsend_destroyv(snddata);
    }
-
-   qnx_internal_msgsend_destroyv(&snddata);
-    
+   
 out_clean_out:
 
    if (out != buf_out && out != 0)

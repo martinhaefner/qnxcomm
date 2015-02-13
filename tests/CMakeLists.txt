@@ -15,6 +15,7 @@ add_executable(unittests
    msgsend.cpp
    msgsend_noreply.cpp
    msgsendv.cpp
+   msgsend_noreplyv.cpp
    msgsendpulse.cpp
    timeout.cpp
    servercrash.cpp

@@ -153,7 +153,7 @@ extern int qnx_driver_data_is_process_available(struct qnx_driver_data* data, pi
 
 
 extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend** data, struct qnx_io_msgsend* io, pid_t pid);
-extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_msgsendv* _iov, pid_t pid);
+extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend** data, struct qnx_io_msgsendv* _iov, pid_t pid);
 extern int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid);
 
 extern void qnx_internal_msgsend_cleanup_and_free(struct qnx_internal_msgsend* send_data);

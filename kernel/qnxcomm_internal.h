@@ -83,14 +83,12 @@ struct qnx_connection
 };
 
 
-// FIXME number of open files: sysctl_nr_open
 struct qnx_connection_table
 {
    struct qnx_connection** conn;
    size_t capacity;
    
-   int lastfree;
-   struct list_head freelist;
+   spinlock_t lock;
 };
 
 

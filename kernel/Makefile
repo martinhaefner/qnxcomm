@@ -1,7 +1,7 @@
 obj-m += qnxcomm.o
 qnxcomm-objs := channel.o connection.o driver_data.o \
 	internal_msgsend.o process_entry.o qnxcomm_driver.o \
-	proc.o 
+	proc.o connection_table.o 
 
 
 all:

@@ -12,7 +12,12 @@ MODULE_DESCRIPTION("QNX like message passing for the Linux kernel");
 
 
 #define QNX_PROC_ENTRY(f) ((struct qnx_process_entry*)f->private_data)
+
 #define QNX_CONN_IS_VALID(conn) (conn.coid > 0)
+
+#define QNX_FREE_IF_NOT(ptr, stack_buf) \
+   if (ptr != stack_buf && ptr != 0)    \
+      kfree(ptr);
 
 
 static struct qnx_driver_data driver_data;
@@ -631,14 +636,12 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data)
       
 out_clean_out:
 
-   if (out != buf_out && out != 0)
-      kfree(out);
-
+   QNX_FREE_IF_NOT(out, buf_out);
+   
 out_clean_in:    
 
-   if (in != buf_in && in != 0)
-      kfree(in);
-   
+   QNX_FREE_IF_NOT(in, buf_in);
+      
 out:    
    return rc;
 }
@@ -721,13 +724,11 @@ int handle_msgsend_noreplyv(struct qnx_process_entry* entry, long data)
       
 out_clean_out:
 
-   if (out != buf_out && out != 0)
-      kfree(out);
-
+   QNX_FREE_IF_NOT(out, buf_out);
+   
 out_clean_in:    
 
-   if (in != buf_in && in != 0)
-      kfree(in);
+   QNX_FREE_IF_NOT(in, buf_in);
    
 out:    
    return rc;

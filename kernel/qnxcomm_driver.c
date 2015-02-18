@@ -13,7 +13,7 @@ MODULE_DESCRIPTION("QNX like message passing for the Linux kernel");
 
 #define QNX_PROC_ENTRY(f) ((struct qnx_process_entry*)f->private_data)
 
-#define QNX_CONN_IS_VALID(conn) (conn.coid > 0)
+#define QNX_CONN_IS_VALID(conn) (conn.chid > 0)
 
 #define QNX_FREE_IF_NOT(ptr, stack_buf) \
    if (ptr != stack_buf && ptr != 0)    \

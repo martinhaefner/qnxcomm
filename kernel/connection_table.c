@@ -6,6 +6,7 @@
 #define QNX_INITIAL_TABLE_SIZE 64
 
 
+static
 int qnx_connection_table_reserve_unlocked(struct qnx_connection_table* table, int newsize)
 {
    struct qnx_connection** old;
@@ -51,6 +52,20 @@ int qnx_connection_table_init(struct qnx_connection_table* table)
    
    rc = qnx_connection_table_reserve_unlocked(table, QNX_INITIAL_TABLE_SIZE);
    return rc > 0 ? 0 : rc;
+}
+
+
+void qnx_connection_table_destroy(struct qnx_connection_table* table)
+{
+   int i;
+   
+   for(i=0; i<table->capacity; ++i)
+   {
+      if (table->conn[i])
+         kfree(table->conn[i]);
+   }
+   
+   kfree(table->conn);
 }
 
 
@@ -114,7 +129,7 @@ int qnx_connection_table_remove(struct qnx_connection_table* table, int coid)
 
 struct qnx_connection qnx_connection_table_retrieve(struct qnx_connection_table* table, int coid)
 {
-   struct qnx_connection rc = { { 0 }, 0 };
+   struct qnx_connection rc = { 0 , 0 };
    struct qnx_connection* conn;
    
    rcu_read_lock();

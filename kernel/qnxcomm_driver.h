@@ -21,8 +21,6 @@
 #include <asm-generic/siginfo.h>
 
 
-#define _NTO_SIDE_CHANNEL ((~0u ^ (~0u >> 1)) >> 1)
-
 #define QNX_FLAG_NOREPLY    0x1
 
 
@@ -67,7 +65,6 @@ struct qnx_io_attach
 {
    pid_t pid;
    int chid;
-   unsigned int index;
    int flags;
 };
 

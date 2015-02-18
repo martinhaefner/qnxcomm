@@ -12,7 +12,7 @@ extern "C" {
 #endif   
 
 
-#define _NTO_SIDE_CHANNEL ((~0u ^ (~0u >> 1)) >> 1)
+#define _NTO_SIDE_CHANNEL ((int)((~0u ^ (~0u >> 1)) >> 1))
 #define QNX_FLAG_NOREPLY    0x1
 
 struct _msg_info 

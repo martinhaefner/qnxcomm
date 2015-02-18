@@ -5,14 +5,14 @@ void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_d
 {
    kref_init(&entry->refcnt);
    entry->pid = current_get_pid_nr(current);
+
+   qnx_connection_table_init(&entry->connections);
    
    INIT_LIST_HEAD(&entry->channels);
-   INIT_LIST_HEAD(&entry->connections);
    INIT_LIST_HEAD(&entry->pending);
    INIT_LIST_HEAD(&entry->pollfds);
    
    spin_lock_init(&entry->channels_lock);
-   spin_lock_init(&entry->connections_lock);
    spin_lock_init(&entry->pending_lock);   
    spin_lock_init(&entry->pollfds_lock);
    
@@ -62,21 +62,7 @@ void qnx_process_entry_free(struct kref* refcount)
    
    pr_debug("pendings done\n");
  
-   spin_lock(&entry->connections_lock);
-   
-   while(!list_empty(&entry->connections))
-   {
-      struct qnx_connection* conn;
-      pr_debug("connection...\n");
- 
-      conn = list_first_entry(&entry->connections, struct qnx_connection, hook);
-      list_del_rcu(&conn->hook);
-      
-      synchronize_rcu();      
-      kfree(conn);
-   }
-
-   spin_unlock(&entry->connections_lock); 
+   qnx_connection_table_destroy(&entry->connections);
    
    pr_debug("finished\n");
  
@@ -310,14 +296,13 @@ int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct qnx
       if (qnx_process_entry_is_channel_available(proc, att_data->chid))
       {
          struct qnx_connection* conn = (struct qnx_connection*)kmalloc(sizeof(struct qnx_connection), GFP_USER);
-         
-         rc = qnx_connection_init(conn, att_data->pid, att_data->chid, att_data->index);
-            
-         spin_lock(&entry->connections_lock);
-         
-         list_add_rcu(&conn->hook, &entry->connections);
-         
-         spin_unlock(&entry->connections_lock);
+         if (conn)
+         {
+            qnx_connection_init(conn, att_data->pid, att_data->chid);
+            rc = qnx_connection_table_add(&entry->connections, conn);
+         }
+         else
+            rc = -ENOMEM;
       }
       else
          rc = -ESRCH;
@@ -333,54 +318,11 @@ int qnx_process_entry_add_connection(struct qnx_process_entry* entry, struct qnx
 
 int qnx_process_entry_remove_connection(struct qnx_process_entry* entry, int coid)
 {
-   int rc = -EINVAL;   
-   
-   struct list_head* iter;
-   struct qnx_connection* conn = 0;
-   
-   spin_lock(&entry->connections_lock);
-   
-   list_for_each(iter, &entry->connections)
-   {
-      conn = list_entry(iter, struct qnx_connection, hook);
-      if (conn->coid == coid)
-      {
-         list_del_rcu(iter);
-         
-         synchronize_rcu();
-         kfree(conn);
-         
-         rc = 0;   
-         break;
-      }    
-   }
-   
-   spin_unlock(&entry->connections_lock);
-   
-   return rc;
+   return qnx_connection_table_remove(&entry->connections, coid);
 }
 
 
 struct qnx_connection qnx_process_entry_find_connection(struct qnx_process_entry* entry, int coid)
 {
-   struct qnx_connection rc = { { 0 }, 0 };
-   struct qnx_connection* conn;
-   
-   rcu_read_lock();
-
-   list_for_each_entry_rcu(conn, &entry->connections, hook)
-   {
-      if (conn->coid == coid)
-      { 
-         rc.coid = coid;
-         rc.pid = conn->pid;
-         rc.chid = conn->chid;
-         
-         break;
-      }
-   }
-   
-   rcu_read_unlock();
-    
-   return rc;
+   return qnx_connection_table_retrieve(&entry->connections, coid);
 }

@@ -4,45 +4,48 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)    
 
-#define QNX_PROC_ROOT_DIR "qnxcomm"
+#define QNX_PROC_ROOT_DIR    "qnxcomm"
 #define QNX_PROC_CONNECTIONS "connections"
-#define QNX_PROC_CHANNELS "channels"
+#define QNX_PROC_CHANNELS    "channels"
+
+#define QNX_DRIVER_DATA(sf) ((struct qnx_driver_data*)sf->private) 
 
 
 static int 
 qnx_show_connections(struct seq_file *buf, void *v)
 {
-   struct qnx_driver_data* data = (struct qnx_driver_data*)buf->private;
+   struct qnx_driver_data* data = QNX_DRIVER_DATA(buf);
    struct qnx_process_entry* entry;
-   struct qnx_connection* conn;
+   
    int have_output = 0;
    
    rcu_read_lock();
-   
-   if (!list_empty(&data->process_entries))
+
+   list_for_each_entry_rcu(entry, &data->process_entries, hook)
    {
-      list_for_each_entry_rcu(entry, &data->process_entries, hook)
-      {         
-         if (!list_empty(&entry->connections))
+      int i;
+      
+      have_output = 1;
+      seq_printf(buf, "pid=%d:\n", entry->pid);
+
+      // FIXME need 'max' indicator in qnx_connection_table
+      for(i=0; i<entry->connections.capacity; ++i)
+      {
+         struct qnx_connection* conn = rcu_dereference(entry->connections.conn)[i];
+         if (conn)
          {
-            have_output = 1;
-            seq_printf(buf, "pid=%d:\n", entry->pid);
-         
-            list_for_each_entry_rcu(conn, &entry->connections, hook)
-            {
-               seq_printf(buf, "   %d => pid=%d, chid=%d\n", conn->coid, conn->pid, conn->chid);
-            }
-            
-            seq_printf(buf, "\n");
-         }                     
+            seq_printf(buf, "   %d => pid=%d, chid=%d\n", i, conn->pid, conn->chid);
+         }
       }
+      
+      seq_printf(buf, "\n");
    }
-   
+         
    rcu_read_unlock();
    
    if (!have_output)
       seq_printf(buf, "<no processes attached>\n");
-   
+
    return 0;
 }
 
@@ -50,19 +53,22 @@ qnx_show_connections(struct seq_file *buf, void *v)
 static int 
 qnx_show_channels(struct seq_file *buf, void *v)
 {
-   struct qnx_driver_data* data = (struct qnx_driver_data*)buf->private;
-   struct qnx_process_entry* entry;
-   struct qnx_channel* chnl;
+   struct qnx_driver_data* data = QNX_DRIVER_DATA(buf);
+   
    int have_output = 0;
    
    rcu_read_lock();
    
    if (!list_empty(&data->process_entries))
    {
+      struct qnx_process_entry* entry;
+   
       list_for_each_entry_rcu(entry, &data->process_entries, hook)
       {
          if (!list_empty(&entry->channels))
          {
+            struct qnx_channel* chnl;
+            
             have_output = 1;
             seq_printf(buf, "pid=%d: ", entry->pid);
          

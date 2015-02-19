@@ -24,21 +24,25 @@ qnx_show_connections(struct seq_file *buf, void *v)
    list_for_each_entry_rcu(entry, &data->process_entries, hook)
    {
       int i;
+      struct qnx_connection_table_data* data = rcu_dereference(entry->connections.data);
       
-      have_output = 1;
-      seq_printf(buf, "pid=%d:\n", entry->pid);
-
-      // FIXME need 'max' indicator in qnx_connection_table
-      for(i=0; i<entry->connections.capacity; ++i)
+      if (data)
       {
-         struct qnx_connection* conn = rcu_dereference(entry->connections.conn)[i];
-         if (conn)
-         {
-            seq_printf(buf, "   %d => pid=%d, chid=%d\n", i, conn->pid, conn->chid);
+         have_output = 1;
+         
+         seq_printf(buf, "pid=%d:\n", entry->pid);      
+
+         // FIXME need 'max' indicator in qnx_connection_table
+         for(i=0; i<data->capacity; ++i)
+         {            
+            struct qnx_connection* conn = rcu_dereference(data->conn[i]);
+            
+            if (conn)         
+               seq_printf(buf, "   %d => pid=%d, chid=%d\n", i, conn->pid, conn->chid);         
          }
+         
+         seq_printf(buf, "\n");
       }
-      
-      seq_printf(buf, "\n");
    }
          
    rcu_read_unlock();

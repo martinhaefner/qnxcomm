@@ -79,11 +79,18 @@ struct qnx_connection
 };
 
 
+struct qnx_connection_table_data
+{
+   size_t capacity;
+   size_t max;
+   
+   struct qnx_connection* conn[1];   
+};
+
+
 struct qnx_connection_table
 {
-   struct qnx_connection** conn;
-   size_t capacity;
-   
+   struct qnx_connection_table_data* data;      
    spinlock_t lock;
 };
 

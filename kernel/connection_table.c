@@ -13,6 +13,13 @@ size_t qnx_connection_table_get_capacity(struct qnx_connection_table* table)
 }
 
 
+static inline
+int qnx_connection_table_get_max(struct qnx_connection_table* table)
+{
+   return table->data ? table->data->max : 0;
+}
+
+
 static
 int qnx_connection_table_reserve_unlocked(struct qnx_connection_table* table, int newsize)
 {
@@ -50,7 +57,10 @@ int qnx_connection_table_reserve_unlocked(struct qnx_connection_table* table, in
    
    return oldsize;
 }
-   
+
+
+// ---------------------------------------------------------------------
+
 
 int qnx_connection_table_init(struct qnx_connection_table* table)
 {
@@ -69,7 +79,7 @@ void qnx_connection_table_destroy(struct qnx_connection_table* table)
 {
    int i;
    
-   for(i=0; i < qnx_connection_table_get_capacity(table); ++i)   // FIXME use max here instead of capacity
+   for(i=0; i < qnx_connection_table_get_max(table); ++i)
    {
       if (table->data->conn[i])
          kfree(table->data->conn[i]);
@@ -92,6 +102,7 @@ int qnx_connection_table_add(struct qnx_connection_table* table, struct qnx_conn
       {
          rcu_assign_pointer(table->data->conn[i], conn);
          rc = i;
+         
          break;
       }
    }
@@ -107,6 +118,9 @@ int qnx_connection_table_add(struct qnx_connection_table* table, struct qnx_conn
       }
    }
    
+   if (rc > qnx_connection_table_get_max(table))
+      table->data->max = rc;
+   
    spin_unlock(&table->lock);
    
    return rc;
@@ -121,13 +135,24 @@ int qnx_connection_table_remove(struct qnx_connection_table* table, int coid)
    
    spin_lock(&table->lock);
    
-   // FIXME check for signed/unsigned stuff here...
-   if (likely(coid < qnx_connection_table_get_capacity(table)))
+   if (likely((size_t)coid < qnx_connection_table_get_capacity(table)))
    {
       conn = table->data->conn[coid];
    
       if (likely(conn))
       {
+         if (coid == table->data->max)
+         {
+            // assign new max fd
+            int max = coid - 1;
+            
+            while(!table->data->conn[max])
+               --max;
+            
+            table->data->max = max;
+         }
+         
+         // make visible
          rcu_assign_pointer(table->data->conn[coid], NULL);
          rc = 0;
       }      
@@ -167,4 +192,40 @@ struct qnx_connection qnx_connection_table_retrieve(struct qnx_connection_table*
    rcu_read_unlock();
    
    return rc;
+}
+
+
+int qnx_connection_table_is_empty(struct qnx_connection_table* table)
+{
+   int rc = 1;
+   struct qnx_connection_table_data* data = rcu_dereference(table->data);
+   
+   if (likely(data) && data->max > 0)
+      rc = 0;
+   
+   return rc;
+}
+
+
+int qnx_connection_table_for_each(struct qnx_connection_table* table, ct_callback_t func, void* arg)
+{
+   int cnt = 0;
+   struct qnx_connection_table_data* data = rcu_dereference(table->data);
+   
+   if (data)
+   {
+      int i;
+      for(i=0; i<=data->max; ++i)
+      {
+         struct qnx_connection* conn = rcu_dereference(data->conn[i]);
+   
+         if (conn)
+         {
+            func(i, conn, arg);
+            ++cnt;
+         }
+      }
+   }
+   
+   return cnt;
 }

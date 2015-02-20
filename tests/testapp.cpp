@@ -49,6 +49,7 @@ int main(int argc, const char** argv)
          sleep(10);
          int rc = MsgSend(coid, buf, strlen(buf)+1, buf, 1024);
          printf("rc=%d\n", rc);
+         sleep(60);
       }
       else if (!strcmp(argv[1], "--server"))
       {
@@ -58,6 +59,7 @@ int main(int argc, const char** argv)
          
          int rcvid = MsgReceive(chid, buf, sizeof(buf), &info);
          printf("rcvid=%d\n", rcvid);         
+         sleep(60);
       }      
       else if (!strcmp(argv[1], "--crash-server"))
       {

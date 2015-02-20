@@ -202,10 +202,10 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
    
    //printk("now num waiting: %d\n", atomic_read(&chnl->num_waiting));
    
-   // empty?! FIXME maybe spurious wakeup here?!
+   // empty?! maybe spurious wakeup here?!
    if (list_empty(&chnl->waiting))
    {
-      printk("Empty...\n");
+      pr_debug("Empty...\n");
       spin_unlock(&chnl->waiting_lock);      
       
       rc = -ETIMEDOUT;
@@ -215,26 +215,14 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
    ptr = chnl->waiting.next;
    atomic_dec(&chnl->num_waiting);
    
-   //printk("III\n");
    send_data = list_entry(ptr, struct qnx_internal_msgsend, hook);   
    
-   //printk("III+ data=%p tid=%p, rcvid=%d\n", send_data, send_data->task, send_data->rcvid);
    list_del(ptr);
    
-   /*{
-      struct qnx_internal_msgsend* iter;
-   
-      list_for_each_entry(iter, &chnl->waiting, hook)
-      {
-         printk("item after rcvid=%d, task=%p\n", iter->rcvid, iter->task);
-      }
-   }*/
-   
    send_data->state = QNX_STATE_RECEIVING;
-   //printk("III++\n");
    
    spin_unlock(&chnl->waiting_lock);
-   //printk("IV\n");
+   
    // assign meta information
    memset(&recv_data.info, 0, sizeof(struct _msg_info));   
    
@@ -313,11 +301,7 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
    {
       if (likely(rc > 0))
       {
-         //printk("V\n");
-   
          qnx_process_entry_add_pending(entry, send_data);
-         //printk("VI\n");
-   
       }
       else 
       {
@@ -338,8 +322,6 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
 out_channel_release:
 
    qnx_channel_release(chnl);
-
-//printk("VII\n");
    
 out:
 

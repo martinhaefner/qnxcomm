@@ -48,7 +48,7 @@ struct _pulse
    int8_t                      code;
    uint8_t                     zero[3];
    union sigval                value;
-   int32_t                     scoid;   ///< FIXME unset
+   int32_t                     scoid;   ///< TODO currently unset
 };
 
 

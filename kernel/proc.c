@@ -11,6 +11,13 @@
 #define QNX_DRIVER_DATA(sf) ((struct qnx_driver_data*)sf->private) 
 
 
+void print_connection(int coid, struct qnx_connection* conn, void* arg)
+{
+   struct seq_file* buf = (struct seq_file*)arg;
+   seq_printf(buf, "   %d => pid=%d, chid=%d\n", coid, conn->pid, conn->chid);         
+}
+
+
 static int 
 qnx_show_connections(struct seq_file *buf, void *v)
 {
@@ -23,23 +30,13 @@ qnx_show_connections(struct seq_file *buf, void *v)
 
    list_for_each_entry_rcu(entry, &data->process_entries, hook)
    {
-      int i;
-      struct qnx_connection_table_data* data = rcu_dereference(entry->connections.data);
-      
-      if (data)
-      {
+      if (!qnx_connection_table_is_empty(&entry->connections))
+      {      
          have_output = 1;
          
          seq_printf(buf, "pid=%d:\n", entry->pid);      
-
-         // FIXME need 'max' indicator in qnx_connection_table
-         for(i=0; i<data->capacity; ++i)
-         {            
-            struct qnx_connection* conn = rcu_dereference(data->conn[i]);
-            
-            if (conn)         
-               seq_printf(buf, "   %d => pid=%d, chid=%d\n", i, conn->pid, conn->chid);         
-         }
+         
+         (void)qnx_connection_table_for_each(&entry->connections, &print_connection, buf);
          
          seq_printf(buf, "\n");
       }

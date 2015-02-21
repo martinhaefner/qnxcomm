@@ -33,16 +33,24 @@ struct qnx_connection_table
 // ---------------------------------------------------------------------
 
 
-// FIXME remove 'extern'
-extern int qnx_connection_table_init(struct qnx_connection_table* table);
-extern void qnx_connection_table_destroy(struct qnx_connection_table* table);
-extern int qnx_connection_table_add(struct qnx_connection_table* table, struct qnx_connection* conn);
-extern int qnx_connection_table_remove(struct qnx_connection_table* table, int coid);
-extern struct qnx_connection qnx_connection_table_retrieve(struct qnx_connection_table* table, int coid);
+/// constructor/destructor
+int qnx_connection_table_init(struct qnx_connection_table* table);
+
+void qnx_connection_table_destroy(struct qnx_connection_table* table);
+
+
+/// connection management
+int qnx_connection_table_add(struct qnx_connection_table* table, struct qnx_connection* conn);
+
+int qnx_connection_table_remove(struct qnx_connection_table* table, int coid);
+
+struct qnx_connection qnx_connection_table_retrieve(struct qnx_connection_table* table, int coid);
+
 
 /// these functions must only be called within a rcu_read_lock critical section.
-extern int qnx_connection_table_is_empty(struct qnx_connection_table* table);
-extern int qnx_connection_table_for_each(struct qnx_connection_table* table, ct_callback_t func, void* arg);
+int qnx_connection_table_is_empty(struct qnx_connection_table* table);
+
+int qnx_connection_table_for_each(struct qnx_connection_table* table, ct_callback_t func, void* arg);
 
 
 #endif   // __QNXCOMM_CONNECTION_TABLE_H

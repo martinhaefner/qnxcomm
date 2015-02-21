@@ -3,6 +3,7 @@
 
 
 #include <asm/uaccess.h>
+#include <linux/version.h>
 
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,2,0)

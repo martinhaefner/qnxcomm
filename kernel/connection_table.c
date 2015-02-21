@@ -1,6 +1,7 @@
-#include "qnxcomm_internal.h"
+#include "connection_table.h"
 
 #include <linux/fs.h>
+#include <linux/slab.h>
 
 
 #define QNX_INITIAL_TABLE_SIZE 64

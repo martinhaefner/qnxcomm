@@ -1,10 +1,19 @@
 #include <asm/uaccess.h>
-#include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/poll.h>
 #include <linux/fdtable.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/slab.h>
 
+#include "internal_msgsend.h"
 #include "qnxcomm_internal.h"
+#include "channel.h"
+#include "driver_data.h"
+#include "proc.h"
 
 
 MODULE_LICENSE("GPL");

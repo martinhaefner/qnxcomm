@@ -30,13 +30,16 @@ struct qnx_channel
 // ---------------------------------------------------------------------
 
 
-extern int qnx_channel_init(struct qnx_channel* chnl);
+/// construction/destruction
+int qnx_channel_init(struct qnx_channel* chnl);
 
-extern void qnx_channel_release(struct qnx_channel* chnl);
+void qnx_channel_release(struct qnx_channel* chnl);
 
-extern int qnx_channel_add_new_message(struct qnx_channel* chnl, struct qnx_internal_msgsend* data);
 
-extern int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid);
+/// messages management
+int qnx_channel_add_new_message(struct qnx_channel* chnl, struct qnx_internal_msgsend* data);
+
+int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid);
 
 
 #endif   // __QNXCOMM_CHANNEL_H

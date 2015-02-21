@@ -1,4 +1,12 @@
+#include "process_entry.h"
+
+#include <linux/slab.h>
+
 #include "qnxcomm_internal.h"
+#include "channel.h"
+#include "connection.h"
+#include "internal_msgsend.h"
+#include "driver_data.h"
 
 
 void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_data* driver)

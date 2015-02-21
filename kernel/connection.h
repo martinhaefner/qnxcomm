@@ -15,7 +15,7 @@ struct qnx_connection
 // ---------------------------------------------------------------------
 
 
-inline
+static inline
 void qnx_connection_init(struct qnx_connection* conn, pid_t pid, int chid)
 {
    // target channel information

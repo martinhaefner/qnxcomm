@@ -1,6 +1,7 @@
-#include "qnxcomm_internal.h"
+#include "internal_msgsend.h"
 
 #include <linux/uio.h>
+#include <linux/slab.h>
 #include <asm/uaccess.h>
 
 

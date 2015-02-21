@@ -42,23 +42,23 @@ struct qnx_internal_msgsend
 
 
 /// constructors
-extern int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_msgsend* io, pid_t pid);
+int qnx_internal_msgsend_init(struct qnx_internal_msgsend* data, struct qnx_io_msgsend* io, pid_t pid);
 
-extern int qnx_internal_msgsend_init_noreply(struct qnx_internal_msgsend** out_data, struct qnx_io_msgsend* io, pid_t pid);
+int qnx_internal_msgsend_init_noreply(struct qnx_internal_msgsend** out_data, struct qnx_io_msgsend* io, pid_t pid);
 
-extern int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_msgsendv* _iov, pid_t pid);
+int qnx_internal_msgsend_initv(struct qnx_internal_msgsend* data, struct qnx_io_msgsendv* _iov, pid_t pid);
 
-extern int qnx_internal_msgsend_init_noreplyv(struct qnx_internal_msgsend** data, struct qnx_io_msgsendv* _iov, pid_t pid);
+int qnx_internal_msgsend_init_noreplyv(struct qnx_internal_msgsend** data, struct qnx_io_msgsendv* _iov, pid_t pid);
 
-extern int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid);
+int qnx_internal_msgsend_init_pulse(struct qnx_internal_msgsend* data, struct qnx_io_msgsendpulse* io, pid_t pid);
 
 
 /// destructors
-extern void qnx_internal_msgsend_cleanup_and_free(struct qnx_internal_msgsend* send_data);
+void qnx_internal_msgsend_cleanup_and_free(struct qnx_internal_msgsend* send_data);
 
-extern void qnx_internal_msgsend_destroy(struct qnx_internal_msgsend* send_data);
+void qnx_internal_msgsend_destroy(struct qnx_internal_msgsend* send_data);
 
-extern void qnx_internal_msgsend_destroyv(struct qnx_internal_msgsend* data);
+void qnx_internal_msgsend_destroyv(struct qnx_internal_msgsend* data);
 
 
 #endif   // __QNX_INTERNAL_MSGSEND_H

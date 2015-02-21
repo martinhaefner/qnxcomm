@@ -1,6 +1,7 @@
-#include "qnxcomm_internal.h"
+#include "driver_data.h"
 
 #include <asm/uaccess.h>
+#include <linux/sched.h>
 
 
 void qnx_driver_data_init(struct qnx_driver_data* data)

@@ -1,4 +1,7 @@
-#include "qnxcomm_internal.h"
+#include "channel.h"
+#include "internal_msgsend.h"
+
+#include <linux/slab.h>
 
 
 static 

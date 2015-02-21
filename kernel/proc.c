@@ -1,9 +1,17 @@
-#include <linux/seq_file.h>
-
-#include "qnxcomm_internal.h"
-
-
+#include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)    
+
+#include "proc.h"
+
+#include <linux/seq_file.h>
+#include <linux/proc_fs.h>
+
+#include "driver_data.h"
+#include "connection.h"
+#include "channel.h"
+#include "process_entry.h"
+#include "internal_msgsend.h"
+#include "qnxcomm_internal.h"
 
 
 #define QNX_PROC_ROOT_DIR       "qnxcomm"

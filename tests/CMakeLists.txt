@@ -19,7 +19,7 @@ add_executable(unittests
    msgsendpulse.cpp
    timeout.cpp
    servercrash.cpp
-   #multithreaded.cpp
+   multithreaded.cpp
    poll.cpp
    disconnect.cpp
 )

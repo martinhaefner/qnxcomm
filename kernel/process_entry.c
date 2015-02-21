@@ -25,7 +25,6 @@ void qnx_process_entry_free(struct kref* refcount)
 {
    struct qnx_process_entry* entry = container_of(refcount, struct qnx_process_entry, refcnt);
    
-   // FIXME splice the lists in order to reduce lock contention and delete offline   
    struct list_head *iter, *next;
 
    pr_debug("qnx_process_entry_free called\n");

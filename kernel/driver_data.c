@@ -23,13 +23,13 @@ void qnx_driver_data_add_process(struct qnx_driver_data* data, struct qnx_proces
 struct qnx_process_entry* qnx_driver_data_find_process(struct qnx_driver_data* data, pid_t pid)
 {      
    struct qnx_process_entry* entry;
-   printk("searching process %d\n", pid);
+   pr_debug("searching process %d\n", pid);
    
    rcu_read_lock();   
    
    list_for_each_entry_rcu(entry, &data->process_entries, hook)
    {
-      printk("Having entry->pid=%d\n", entry->pid);
+      pr_debug("Having entry->pid=%d\n", entry->pid);
       if (entry->pid == pid) 
       {
          kref_get(&entry->refcnt);

@@ -20,9 +20,11 @@
 
 // XXX this is a hack: my ARM kernel config does not match the installed kernel -> fixit
 #ifdef CONFIG_ARM
-#   define current_get_pid_nr(cur) (*(((pid_t*)&cur->tgid)-1))
+#   define current_get_pid_nr(cur) (*(&cur->tgid-1))
+#   define current_get_tid_nr(cur) (*(&cur->pid-1))
 #else
 #   define current_get_pid_nr(cur) (cur->tgid)
+#   define current_get_tid_nr(cur) (cur->pid)
 #endif
 
 
@@ -43,6 +45,7 @@ struct qnx_internal_msgsend
    
    pid_t sender_pid;
    pid_t receiver_pid;
+   int receiver_chid;
    
    union
    {

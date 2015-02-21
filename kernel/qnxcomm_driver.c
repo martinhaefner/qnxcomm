@@ -2,6 +2,7 @@
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/poll.h>
+#include <linux/fdtable.h>
 
 #include "qnxcomm_internal.h"
 
@@ -600,8 +601,8 @@ int handle_msgsendv(struct qnx_process_entry* entry, long data)
    if (unlikely((rc = qnx_internal_msgsend_initv(&snddata, &send_data, entry->pid))))
       goto out_clean_out;  
 
-   snddata.receiver_pid = conn.pid;         
-
+   snddata.receiver_pid = conn.pid; 
+   
    rc = handle_msgsend_internal_block(chnl, &snddata);                                    
    // do not access chnl any more from here
 
@@ -699,8 +700,8 @@ int handle_msgsend_noreplyv(struct qnx_process_entry* entry, long data)
    if (unlikely((rc = qnx_internal_msgsend_init_noreplyv(&snddata, &send_data, entry->pid))))
       goto out_clean_out;  
 
-   snddata->receiver_pid = conn.pid;         
-
+   snddata->receiver_pid = conn.pid;  
+   
    qnx_channel_add_new_message(chnl, snddata); 
    qnx_channel_release(chnl);
       

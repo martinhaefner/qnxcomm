@@ -61,6 +61,8 @@ void qnx_channel_release(struct qnx_channel* chnl)
 
 int qnx_channel_add_new_message(struct qnx_channel* chnl, struct qnx_internal_msgsend* data)
 {
+   data->receiver_chid = chnl->chid;
+   
    spin_lock(&chnl->waiting_lock);
    list_add_tail(&data->hook, &chnl->waiting); 
    

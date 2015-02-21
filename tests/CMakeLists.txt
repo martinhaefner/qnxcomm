@@ -21,6 +21,7 @@ add_executable(unittests
    servercrash.cpp
    #multithreaded.cpp
    poll.cpp
+   disconnect.cpp
 )
 
 add_executable(testapp testapp.cpp )

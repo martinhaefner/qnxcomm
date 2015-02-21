@@ -5,15 +5,15 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)    
 
-#define QNX_PROC_ROOT_DIR    "qnxcomm"
+
+#define QNX_PROC_ROOT_DIR       "qnxcomm"
 
 #define QNX_PROC_CONNECTIONS    "connections"
 #define QNX_PROC_CHANNELS       "channels"
 #define QNX_PROC_BLOCKED_TASKS  "blocked"
 
-#define QNX_DRIVER_DATA(sf) ((struct qnx_driver_data*)sf->private) 
 
-// FIXME add listing of blocked tasks
+#define QNX_DRIVER_DATA(sf) ((struct qnx_driver_data*)sf->private) 
 
 
 void print_connection(int coid, struct qnx_connection* conn, void* arg)
@@ -195,5 +195,6 @@ void qnx_proc_destroy(struct qnx_driver_data* data)
 {
    remove_proc_subtree(QNX_PROC_ROOT_DIR, 0);
 }
+
 
 #endif   // LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)

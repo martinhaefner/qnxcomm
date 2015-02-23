@@ -3,6 +3,8 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 
+#include "qnxcomm_internal.h"
+
 
 #define QNX_INITIAL_TABLE_SIZE 64
 
@@ -29,7 +31,7 @@ int qnx_connection_table_reserve_unlocked(struct qnx_connection_table* table, in
    
    int oldsize = qnx_connection_table_get_capacity(table);
    
-   if (unlikely(newsize > 1024   /*FIXME somehow get sysctl_nr_open*/))
+   if (unlikely(newsize > qnx_max_connections_per_process))
       return -EMFILE;
       
    if (likely(newsize <= oldsize))

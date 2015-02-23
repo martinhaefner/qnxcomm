@@ -24,6 +24,7 @@ struct qnx_channel
    
    wait_queue_head_t waiting_queue;
    atomic_t num_waiting;     ///< wait queue helper flag
+   int num_waiting_noreply;
 };
 
 

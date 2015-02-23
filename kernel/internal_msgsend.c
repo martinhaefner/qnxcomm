@@ -4,6 +4,8 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 
+#include "qnxcomm_internal.h"
+
 
 static 
 atomic_t gbl_next_rcvid = ATOMIC_INIT(0);      
@@ -77,50 +79,26 @@ out:
 
 int qnx_internal_msgsend_init_noreplyv(struct qnx_internal_msgsend** _data, struct qnx_io_msgsendv* _iov, pid_t pid)
 {   
-   int rc = -ENOMEM;
+   int rc;   
+   struct qnx_internal_msgsend* data;
+   void* inbuf = 0;   
    
-   struct qnx_internal_msgsend* data = *_data;
+   size_t inlen = iov_length(_iov->in, _iov->in_len);      
    
-   size_t inlen = iov_length(_iov->in, _iov->in_len);   
-   size_t outlen = iov_length(_iov->out, _iov->out_len);
-   
-   void* allocated = 0;
-   void* inbuf = 0;
-   void* outbuf = 0;
-   
-   if (data)
-   {
-      inbuf = kmalloc(inlen, GFP_USER);   
-      if (unlikely(!inbuf))
-         goto out;
+   if (unlikely(inlen > qnx_max_noreply_msg_size))         
+      return -EINVAL;      
+      
+   data = (struct qnx_internal_msgsend*)kmalloc(sizeof(struct qnx_internal_msgsend) + inlen, GFP_USER);
+   if (unlikely(!data))
+      return -ENOMEM;
          
-      allocated = inbuf;
-      
-      if (outlen > 0)
-      {
-         outbuf = kmalloc(outlen, GFP_USER);   
-         if (unlikely(!outbuf))
-            goto out_free_inbuf;
-      }
-      
-      data->task = current; 
-   }
-   else
-   {
-      data = (struct qnx_internal_msgsend*)kmalloc(sizeof(struct qnx_internal_msgsend) + inlen, GFP_USER);
-      if (unlikely(!data))
-         goto out;
-         
-      allocated = data;
-      
-      inbuf = data + 1;
-      
-      data->task = 0;   // no reply 
-      *_data = data;
-   }
+   inbuf = data + 1;
+   
+   data->task = 0;   // no reply 
+   *_data = data;
             
    if (unlikely(memcpy_fromiovec(inbuf, _iov->in, inlen)))
-      goto out_free_all;
+      goto out_free;
       
    data->rcvid = get_new_rcvid();   
    data->status = 0;   
@@ -133,8 +111,8 @@ int qnx_internal_msgsend_init_noreplyv(struct qnx_internal_msgsend** _data, stru
    data->data.msg.in.iov_base = inbuf;
    data->data.msg.in.iov_len = inlen;
    
-   data->data.msg.out.iov_base = outbuf;
-   data->data.msg.out.iov_len = outlen;
+   data->data.msg.out.iov_base = 0;
+   data->data.msg.out.iov_len = 0;
    
    memset(&data->reply, 0, sizeof(data->reply));
    
@@ -143,12 +121,8 @@ int qnx_internal_msgsend_init_noreplyv(struct qnx_internal_msgsend** _data, stru
    rc = 0;
    goto out;
 
-out_free_all:
-   kfree(outbuf);
-   rc = -EFAULT;
-
-out_free_inbuf:
-   kfree(allocated);
+out_free:
+   kfree(data);
    
 out:
    return rc;

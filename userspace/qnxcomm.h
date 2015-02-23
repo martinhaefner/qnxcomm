@@ -103,21 +103,27 @@ int ConnectAttachEx(uint32_t nd, pid_t pid, int chid, unsigned index, int flags,
 
 /**
  * Send message but don't wait for reply.
- * The maximum size for the message is 1k.
- * The function may block if no more internal slots are available.
+ * The maximum size for the message is defined by the kernel module 
+ * parameter @c noreply_max_size [bytes].
+ * The function may block if no more internal slots are available which
+ * is configurable by the module parameter @c noreply_per_channel [#messages].
  * You must not reply on such a message via MsgReply, nor can you
  * read more data after calling MsgReceive. A NoReply message can be
- * detected via the _msg_info structure flags (QNX_FLAG_NOREPLY is set).
+ * detected from MsgReceive via the _msg_info structure flags 
+ * (QNX_FLAG_NOREPLY is set).
  */
 int MsgSendNoReply(int coid, const void* smsg, int sbytes);
 
 /**
  * Send message but don't wait for reply.
- * The maximum size for the message is 1k.
- * The function may block if no more internal slots are available.
+ * The maximum size for the message is defined by the kernel module 
+ * parameter @c noreply_max_size [bytes].
+ * The function may block if no more internal slots are available which
+ * is configurable by the module parameter @c noreply_per_channel [#messages].
  * You must not reply on such a message via MsgReply, nor can you
  * read more data after calling MsgReceive. A NoReply message can be
- * detected via the _msg_info structure flags (QNX_FLAG_NOREPLY is set).
+ * detected from MsgReceive via the _msg_info structure flags 
+ * (QNX_FLAG_NOREPLY is set).
  */
 int MsgSendNoReplyv(int coid, const struct iovec* siov, int sparts);
 

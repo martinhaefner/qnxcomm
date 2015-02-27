@@ -1,5 +1,6 @@
 #include "channel.h"
 #include "internal_msgsend.h"
+#include "qnxcomm_internal.h"
 
 #include <linux/slab.h>
 
@@ -26,6 +27,8 @@ int qnx_channel_init(struct qnx_channel* chnl)
    init_waitqueue_head(&chnl->waiting_queue);
    
    spin_lock_init(&chnl->waiting_lock);
+   
+   chnl->num_waiting_noreply = 0;
    
    return chnl->chid;
 }
@@ -64,20 +67,41 @@ void qnx_channel_release(struct qnx_channel* chnl)
 
 int qnx_channel_add_new_message(struct qnx_channel* chnl, struct qnx_internal_msgsend* data)
 {
+   int rc = 0;
    data->receiver_chid = chnl->chid;
    
-   spin_lock(&chnl->waiting_lock);
-   list_add_tail(&data->hook, &chnl->waiting); 
+   spin_lock(&chnl->waiting_lock);   
+   
+   // normal message or pulse
+   if (likely(data->rcvid == 0 || data->task != 0)) 
+   {
+      list_add_tail(&data->hook, &chnl->waiting); 
+   }
+   else
+   { 
+      // noreply message
+      if (likely(chnl->num_waiting_noreply < qnx_max_noreply_msg_num))
+      {      
+         list_add_tail(&data->hook, &chnl->waiting); 
+         ++chnl->num_waiting_noreply;         
+      }
+      else
+         rc = -1;
+   }
    
    atomic_inc(&chnl->num_waiting);
    spin_unlock(&chnl->waiting_lock);
    
    wake_up(&chnl->waiting_queue);
    
-   return 0;
+   return rc;
 }
 
 
+/**
+ * This is only called for normal messages, therefore no check for pulse
+ * or noreply messages in here.
+ */
 int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid)
 {
    int rc = 0;
@@ -90,7 +114,7 @@ int qnx_channel_remove_message(struct qnx_channel* chnl, int rcvid)
       if (list_entry(iter, struct qnx_internal_msgsend, hook)->rcvid == rcvid)
       {
          list_del(iter);
-         atomic_dec(&chnl->num_waiting);
+         atomic_dec(&chnl->num_waiting);         
          
          rc = 1;
          break;

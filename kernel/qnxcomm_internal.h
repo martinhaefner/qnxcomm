@@ -23,6 +23,12 @@
 #define QNX_MAX_IOVEC_LEN     5
 
 
+extern int qnx_max_connections_per_process;
+extern int qnx_max_channels_per_process;
+extern uint qnx_max_noreply_msg_size;
+extern uint qnx_max_noreply_msg_num;
+
+
 struct qnx_pollfd
 {
    struct list_head hook;

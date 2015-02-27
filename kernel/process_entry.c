@@ -7,6 +7,22 @@
 #include "connection.h"
 #include "internal_msgsend.h"
 #include "driver_data.h"
+#include "qnxcomm_internal.h"
+
+
+static inline
+int get_num_channels_unlocked(struct qnx_process_entry* entry)
+{
+   int rc = 0;
+   struct qnx_channel* chnl;
+   
+   list_for_each_entry(chnl, &entry->channels, hook)
+   {
+      ++rc;
+   }
+   
+   return rc;
+}
 
 
 void qnx_process_entry_init(struct qnx_process_entry* entry, struct qnx_driver_data* driver)
@@ -207,16 +223,29 @@ out:
 
 int qnx_process_entry_add_channel(struct qnx_process_entry* entry)
 {   
-   int rc;
+   int rc = -ENOMEM;   
+   
+   // we expect that the upper bound 'qnx_max_channels_per_process' is seldomly reached...
    struct qnx_channel* chnl = (struct qnx_channel*)kmalloc(sizeof(struct qnx_channel), GFP_USER);
    
-   rc = qnx_channel_init(chnl);
+   if (likely(chnl))
+   {
+      rc = qnx_channel_init(chnl);
    
-   spin_lock(&entry->channels_lock);
-   
-   list_add_rcu(&chnl->hook, &entry->channels);
-   
-   spin_unlock(&entry->channels_lock);
+      spin_lock(&entry->channels_lock);      
+      
+      if (likely(get_num_channels_unlocked(entry) < qnx_max_channels_per_process))
+      {   
+         list_add_rcu(&chnl->hook, &entry->channels);         
+      }
+      else
+         rc = -EMFILE;
+      
+      spin_unlock(&entry->channels_lock);
+      
+      if (rc < 0)
+         kfree(chnl);
+   }
    
    return rc;
 }
@@ -246,7 +275,7 @@ out:
 }
 
 
-extern struct qnx_channel* qnx_process_entry_find_channel_from_file(struct qnx_process_entry* entry, struct file* f)
+struct qnx_channel* qnx_process_entry_find_channel_from_file(struct qnx_process_entry* entry, struct file* f)
 {
    struct qnx_pollfd* pollfd;
    struct qnx_channel* chnl = 0;

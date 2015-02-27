@@ -18,7 +18,7 @@ struct qnx_internal_msgsend
 {
    struct list_head hook;
    
-   int rcvid;
+   int rcvid;                   ///< 0 for pulse, else > 0
    int status;
    
    pid_t sender_pid;
@@ -32,7 +32,7 @@ struct qnx_internal_msgsend
    } data;
       
    struct iovec reply;
-   struct task_struct* task;
+   struct task_struct* task;   ///< 0 for pulse or noreply message
    
    int state;
 };

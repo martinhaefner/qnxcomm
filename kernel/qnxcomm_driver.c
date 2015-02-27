@@ -36,6 +36,47 @@ static struct cdev* instance;
 static struct class* the_class;
 static struct device* dev;
 
+int qnx_max_connections_per_process = 256;    ///< like max number of open files
+int qnx_max_channels_per_process = 64;        ///< same for channels
+
+uint qnx_max_noreply_msg_size = 4096;         ///< max message size for noreply messages
+uint qnx_max_noreply_msg_num = 128;           ///< number of enqueued noreply messages per channel
+
+
+int set_max_connetions(const char *val, const struct kernel_param *kp)
+{
+   int max;
+   
+   if (kstrtoint(val, 10, &max) == 0)
+   {   
+      // don't allow shrinking
+      if (max > *(int*)kp->arg)
+      {
+         *(int*)kp->arg = max;
+         return 0;
+      }
+   }
+      
+   return -EINVAL;
+}
+
+
+static 
+struct kernel_param_ops ops = {
+   .set = &set_max_connetions,
+   .get = &param_get_int
+};
+
+
+// module parameters exported to sysfs
+module_param_cb(max_connections, &ops, &qnx_max_connections_per_process, 0644);
+module_param_cb(max_channels, &ops, &qnx_max_channels_per_process, 0644);
+module_param_named(noreply_max_size, qnx_max_noreply_msg_size, uint, 0644);
+module_param_named(noreply_per_channel, qnx_max_noreply_msg_num, uint, 0644);
+
+
+// ---------------------------------------------------------------------
+
 
 static
 int handle_msgsend_internal_block(struct qnx_channel* chnl, struct qnx_internal_msgsend* send_data)
@@ -223,9 +264,13 @@ int handle_msgreceive(struct qnx_process_entry* entry, long data)
    }
    
    ptr = chnl->waiting.next;
-   atomic_dec(&chnl->num_waiting);
+   atomic_dec(&chnl->num_waiting);   
    
    send_data = list_entry(ptr, struct qnx_internal_msgsend, hook);   
+   
+   // handle noreply message correctly
+   if (unlikely(send_data->rcvid > 0 && send_data->task == 0))
+      --chnl->num_waiting_noreply;
    
    list_del(ptr);
    
@@ -506,6 +551,29 @@ out:
 }
 
 
+/// loop until data can be sent or signal stops us from sending
+static 
+int busy_loop_add_new_message(struct qnx_channel* chnl, struct qnx_internal_msgsend* snddata)
+{   
+   int rc;
+   
+   while (unlikely((rc = qnx_channel_add_new_message(chnl, snddata)) < 0))
+   {
+      msleep_interruptible(50);
+      
+      if (unlikely(signal_pending(current)))
+      {         
+         kfree(snddata);
+         
+         rc = -ERESTARTSYS;         
+         break;
+      }
+   }
+   
+   return rc;
+}
+
+
 static
 int handle_msgsend_no_reply(struct qnx_process_entry* entry, long data)
 {
@@ -535,7 +603,8 @@ int handle_msgsend_no_reply(struct qnx_process_entry* entry, long data)
          
    snddata->receiver_pid = conn.pid;
             
-   qnx_channel_add_new_message(chnl, snddata); 
+   rc = busy_loop_add_new_message(chnl, snddata); 
+   
    qnx_channel_release(chnl);
    
    return 0;
@@ -649,20 +718,16 @@ int handle_msgsend_noreplyv(struct qnx_process_entry* entry, long data)
    struct qnx_channel* chnl;
    struct qnx_internal_msgsend* snddata = 0;
    
-   struct iovec buf_in[QNX_MAX_IOVEC_LEN];
-   struct iovec buf_out[QNX_MAX_IOVEC_LEN];
+   struct iovec buf_in[QNX_MAX_IOVEC_LEN];   
 
    struct iovec* in = buf_in;
-   struct iovec* out = buf_out;
 
    if (copy_from_user(&send_data, (void*)data, sizeof(struct qnx_io_msgsendv)))
    {
       rc = -EFAULT;
       goto out; 
    }
-   
-   // TODO move this in macro or sub-function, same code
-   // for both buffers
+      
    if (unlikely(send_data.in_len > QNX_MAX_IOVEC_LEN))
    {            
       if (unlikely(!(in = (struct iovec*)kmalloc(sizeof(struct iovec) * send_data.in_len, GFP_USER))))
@@ -670,55 +735,42 @@ int handle_msgsend_noreplyv(struct qnx_process_entry* entry, long data)
          rc = -ENOMEM;
          goto out;
       }
-   }         
-
-   if (unlikely(send_data.out_len > QNX_MAX_IOVEC_LEN))
-   {
-      if (unlikely(!(out = (struct iovec*)kmalloc(sizeof(struct iovec) * send_data.out_len, GFP_USER))))
-      {         
-         rc = -ENOMEM;
-         goto out_clean_in;
-      }
-   }
+   }            
                                       
-   if (unlikely(copy_from_user(in, send_data.in, sizeof(struct iovec) * send_data.in_len)
-      || copy_from_user(out, send_data.out, sizeof(struct iovec) * send_data.out_len)))                  
+   if (unlikely(copy_from_user(in, send_data.in, sizeof(struct iovec) * send_data.in_len)))                  
    {
       rc = -EFAULT;
-      goto out_clean_out;
+      goto out_clean;
    }
    
    // replace the pointers...
-   send_data.in = in;
-   send_data.out = out;
+   send_data.in = in;   
 
    conn = qnx_process_entry_find_connection(entry, send_data.coid);
    if (unlikely(!QNX_CONN_IS_VALID(conn)))
    {
       rc = -EBADF;
-      goto out_clean_out;
+      goto out_clean;
    }
 
    chnl = qnx_driver_data_find_channel(entry->driver, conn.pid, conn.chid);
    if (unlikely(!chnl))
    {
       rc = -EBADF;
-      goto out_clean_out;
+      goto out_clean;
    }    
    
    if (unlikely((rc = qnx_internal_msgsend_init_noreplyv(&snddata, &send_data, entry->pid))))
-      goto out_clean_out;  
+      goto out_clean;  
 
-   snddata->receiver_pid = conn.pid;  
+   snddata->receiver_pid = conn.pid;   
    
-   qnx_channel_add_new_message(chnl, snddata); 
-   qnx_channel_release(chnl);
+   rc = busy_loop_add_new_message(chnl, snddata);   
       
-out_clean_out:
-
-   QNX_FREE_IF_NOT(out, buf_out);
-   
-out_clean_in:    
+   // FIXME do we need this if we use RCU for channels?
+   qnx_channel_release(chnl);
+         
+out_clean:    
 
    QNX_FREE_IF_NOT(in, buf_in);
    
